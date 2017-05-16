@@ -56,9 +56,9 @@ include Macros.inc
 
 ;include /masm32/include/kernel32.inc
 ;include /masm32/include/masm32.inc
-includelib /masm32/lib/kernel32.lib
-includelib /masm32/lib/masm32.lib
-includelib /masm32/lib/user32.lib
+includelib kernel32.lib
+includelib masm32.lib
+includelib user32.lib
 includelib Irvine32.lib
 
 ; Tell the program each of these procedures are found in a different file.
@@ -308,8 +308,6 @@ copyChar:
 returnString:
 	mov byte ptr [edi], 0
 
-	mov byte ptr [edi], 0			;
-
 	popad
 	leave
 	ret
@@ -421,67 +419,69 @@ AddString ENDP
 ;* Date last modified: May 07 , 2017							*
 ;****************************************************************%
 RemoveString PROC
-	enter 0, 0										; push ebp and move esp into ebp
-	pushad											; push all registers to save them
+	enter 0, 0												; push ebp and move esp into ebp
+	pushad													; push all registers to save them
 	
 chooseNumber:
-	invoke putstring, addr _newl					; print a newline 
-	mWrite "Please enter string index to delete: "	; prompts user to enter index of string to delete
-	mGetNumber intStringChoice						; get a single number as input from the user
-	mov ebx, eax									; copy the input number into ebx
-	mov ecx, ebx									; ...as well as ecx
-	add ecx, 30h									; ...then add 30h to ecx (for the ascii equivalent)
+	invoke putstring, addr _newl							; print a newline 
+	mWrite "Please enter string index to delete: "			; prompts user to enter index of string to delete
+	mGetNumber intStringChoice								; get a single number as input from the user
+	mov ebx, eax											; copy the input number into ebx
+	mov ecx, ebx											; ...as well as ecx
+	add ecx, 30h											; ...then add 30h to ecx (for the ascii equivalent)
 	push ecx
 
-	mov eax, [lpStrings + (ebx * 4)]				; copies the address of the specified string into eax
+	mov eax, [lpStrings + (ebx * 4)]						; copies the address of the specified string into eax
 
-	.If (eax == 0)									; if the string they chose does not exist
+	.If (eax == 0)											; if the string they chose does not exist
 		
-		invoke putstring, addr strShowInvalidInput	; Output error message 
-		invoke putstring, addr strAskNewInput		; Ask if they want to choose a different number
+		invoke putstring, addr strShowInvalidInput			; Output error message 
+		invoke putstring, addr strAskNewInput				; Ask if they want to choose a different number
 getInput1:
-		invoke getch								; Wait for user input
-		.If (al == 'y' || al == 'Y')				; if user inputs a 'y' or 'Y'
+		invoke getch										; Wait for user input
+		.If (al == 'y' || al == 'Y')						; if user inputs a 'y' or 'Y'
+			invoke putch, al
 			pop ecx
-			jmp chooseNumber						; 	then jmp to choose another number
-		.Elseif (al == 'n' || al == 'N')			; if user inputs a 'n' or 'N'
+			jmp chooseNumber								; 	then jmp to choose another number
+		.Elseif (al == 'n' || al == 'N')					; if user inputs a 'n' or 'N'
+			invoke putch, al
 			pop ecx
-			jmp return								;	then jmp to return to the main function
-		.Else										; otherwise...
-			jmp getInput1							;   continue to wait for input
+			jmp return										;	then jmp to return to the main function
+		.Else												; otherwise...
+			jmp getInput1									;   continue to wait for input
 		.Endif
 	.Else
-		mWrite "Deleting: ["						; 
-		invoke putch, cl                            ; print the number of string we're deleting
-		mWrite "] "                                 ;
-		invoke putstring, [lpStrings + (ebx * 4)]   ; print the string
-		invoke putstring, addr strConfirmDeletion   ; print a message to confirm deletion of string
+		mWrite "Deleting: ["								; 
+		invoke putch, cl                            		; print the number of string we're deleting
+		mWrite "] "                                 		;
+		invoke putstring, [lpStrings + (ebx * 4)]   		; print the string
+		invoke putstring, addr strConfirmDeletion   		; print a message to confirm deletion of string
 getInput2:
-		invoke getch								; Wait for user input
-		.If (al == 'y' || al == 'Y')                ; if user inputs a 'y' or 'Y'
-			jmp delete                              ; 	then jmp to delete the string
-		.Elseif (al == 'n' || al == 'N')            ; if user inputs a 'n' or 'N'
+		invoke getch										; Wait for user input
+		.If (al == 'y' || al == 'Y')                		; if user inputs a 'y' or 'Y'
+			jmp delete                              		; 	then jmp to delete the string
+		.Elseif (al == 'n' || al == 'N')            		; if user inputs a 'n' or 'N'
 			pop ecx
-			jmp chooseNumber                        ;	then jmp to return to the main function
+			jmp chooseNumber                        		;	then jmp to return to the main function
 		.Else
 			jmp getInput2
 		.Endif                                      
 delete:
-		invoke HeapFree, hHeap, 0, [lpStrings + (ebx * 4)]				; Free memory on that address of the string
-		mov [lpStrings + (ebx * 4)], 0              ; move a zero into the pointer to that string
+		invoke HeapFree, hHeap, 0, [lpStrings + (ebx * 4)]	; Free memory on that address of the string
+		mov [lpStrings + (ebx * 4)], 0              		; move a zero into the pointer to that string
                      
 		invoke putstring, addr _newl
-		mWrite "SUCCESSFULLY DELETE STRING ["       ;
+		mWrite "SUCCESSFULLY DELETE STRING ["       		;
 		pop ecx
-		invoke putch, cl                            ; print that we successfully deleted the string (with string number)
-		mWrite "] "                                 ;
+		invoke putch, cl                            		; print that we successfully deleted the string (with string number)
+		mWrite "] "                                 		;
 		invoke putstring, addr _newl
 
 	.Endif
 
 return:
-	popad											; restore all registers from the stack
-	leave                                           ; restore esp and pop ebp
+	popad													; restore all registers from the stack
+	leave                                           		; restore esp and pop ebp
 	ret
 RemoveString ENDP
 
@@ -500,25 +500,25 @@ MemoryConsumption PROC
 	mov ecx, 0										; which string we're looking at
 	mov ebx, 0										; how many bytes we've counted so far
 
-	.while (ecx < 10)
-		.if ([lpStrings + (ecx * 4)] != 0)
-			inc ebx
+	.while (ecx < 10)								; while our index < 10...
+		.if ([lpStrings + (ecx * 4)] != 0)			; if the string we're looking at isn't empty...
+			inc ebx									; then, inc ebx to count the null terminator
 
-			push [lpStrings + (ecx * 4)]
-			call String_length
-			add esp,4
+			push [lpStrings + (ecx * 4)]			; 
+			call String_length						; also find the length of that string
+			add esp,4								;
 
-			add ebx, eax
+			add ebx, eax							; ...and add it to the total as well
 		.endif
 
-		inc ecx
+		inc ecx										; then increment which string we're looking at with ecx
 	.endw
 
-	invoke intasc32, addr strNewString, ebx
+	invoke intasc32, addr strNewString, ebx			; convert the number of bytes to a string
 
-	mWrite "The String Array size: "
-	invoke putstring, addr strNewString
-	mWrite " bytes."
+	mWrite "The String Array size: "				;
+	invoke putstring, addr strNewString				; prints the string of how many bytes are reserved
+	mWrite " bytes."								;
 
 return:
 	popad											; restore all registers from the stack
@@ -572,10 +572,12 @@ getInput1:
 		invoke putstring, [lpStrings + (ebx * 4)]   	; print the string
 		invoke putstring, addr strConfirmEdit  			; print a message to confirm edit of string
 getInput2:	
-		invoke getche									; Wait for user input
+		invoke getch									; Wait for user input
 		.If (al == 'y' || al == 'Y')                	; if user inputs a 'y' or 'Y'
+			invoke putch, al
 			jmp edit                              		; 	then jmp to edit the string
 		.Elseif (al == 'n' || al == 'N')            	; if user inputs a 'n' or 'N'
+			invoke putch, al
 			pop ecx	
 			jmp chooseNumber                        	;	then jmp to return to the main function
 		.Else
@@ -589,8 +591,8 @@ edit:
 	push ecx											;
 	mWrite "] "                               			;
 		
-	push [lpStrings + (ebx * 4)]						;
-	call getInput										;
+	push [lpStrings + (ebx * 4)]						; push the addres of the string to edit
+	call getInput										; begin editing the string
 	add esp, 4											;
 	
 	;invoke getstring, addr strNewString, dLimitNum	   	; call getInput and store input in strSecondNum
@@ -650,48 +652,48 @@ SearchString PROC
 
 	mov esi, esp
 
-	.while (edx <= 10)
-		.if ([lpStrings + (edx * 4)] != 0)
-			push offset strNewString
-			push [lpStrings + (edx * 4)]
-			call String_find
-			add esp,8
+	.while (edx <= 10)								; while we're looking at one of the 10  strings....
+		.if ([lpStrings + (edx * 4)] != 0)			; ...if the string isn't empty... 
+			push offset strNewString				;
+			push [lpStrings + (edx * 4)]			; ... then we search through it for the substring using String_find
+			call String_find						;
+			add esp,8								;
 
-			.if (ebx > 0)
-				add ecx, ebx
-				push eax
-				push edx
-			.endif
-		.endif
+			.if (ebx > 0)							; if we found the substring at least once,
+				add ecx, ebx						;	then we add number found to total counter
+				push eax							;	and we store the string number and string for later
+				push edx							;
+			.endif									;
+		.endif										;
 
-		dec edx
-	.endw
+		dec edx										; decrement edx to look at the previous string.
+	.endw											;
 
-	mWrite """"
-	invoke putstring, addr strNewString
-	mWrite """"
+	mWrite """"										;
+	invoke putstring, addr strNewString				; print the substring in quotes
+	mWrite """"										;
 
-	.if (ecx == 0)
+	.if (ecx == 0)									; if ecx is 0, we found no strings
 		mWrite " was not found in any of the strings!"
 		invoke putstring, addr _newl
 	.else
-		mWrite " successfully found "
-		add ecx, 30h
-		invoke putch, cl
-		mWrite " times:"
-		invoke putstring, addr _newl
+		mWrite " successfully found "				; otherwise, output how many strings we found.
+		add ecx, 30h								;
+		invoke putch, cl							; cl holds how many substrings were found
+		mWrite " times:"							;
+		invoke putstring, addr _newl				;
 		
-		.while (esi != esp)
-			pop edx
+		.while (esi != esp)							; while there is still something on the stack...
+			pop edx									; pop edx to print the string number
 
-			add edx, 30h
-			mWrite "["
-			invoke putch, dl
-			mWrite "] "
-			pop eax
-			invoke putstring, eax
-			invoke putstring, addr _newl
-		.endw
+			add edx, 30h							; add 30h to it to make it ascii
+			mWrite "["								;
+			invoke putch, dl						; print the number
+			mWrite "] "								;
+			pop eax									; pop eax to get the address for the string
+			invoke putstring, eax					; print the string to the screen, with capitalized substrings found
+			invoke putstring, addr _newl			; 
+		.endw										;
 	.endif
 	
 return:
@@ -717,18 +719,18 @@ getInput proc												; Start of the GetInput procedure
 	enter 0,0
 	push eax												; push eax to stack to save current value
 	push ecx												; push ecx to stack to save current value
-	push esi
+	push esi												; push esi
 	
-	mov esi, stringInitial
+	mov esi, stringInitial									; move the initial string into esi
 	
 	mov ecx, 0
+		
+	invoke putstring, stringInitial							; print the string so it can be edited
 	
-	invoke putstring, stringInitial
-	
-	.WHILE (byte ptr [esi+ecx] != 0)
-		mov al, byte ptr [esi+ecx]
-		push eax
-		inc ecx
+	.WHILE (byte ptr [esi+ecx] != 0)						; for each character in the string,
+		mov al, byte ptr [esi+ecx]							; copy the character into al
+		push eax											; and push the character to the stack to save it.
+		inc ecx												; then increment ecx to go to next character
 	.ENDW
 		
 input:
@@ -793,88 +795,87 @@ charStr EQU [ebp+12]
 	push ecx						; Temp main string pointer
 	push edx						; length of string
 
-	mov esi, string							
-	mov edi, charStr
+	mov esi, string					; moves the main string into esi		
+	mov edi, charStr				; moves the substring into edi
 	
 	mov ebx, 0
 	
-	push esi
-	call String_length
-	add esp,4
-	inc eax	
+	push esi						; push main string
+	call String_length				; ... so we can get the length of it
+	add esp,4						;
+	inc eax							; add one for null terminator
 	
-	invoke memoryAllocBailey, eax
-	mStrMove esi, eax
-	mov esi, eax
+	invoke memoryAllocBailey, eax	; allocate memory for temporary string to print
+	mStrMove esi, eax				; copy the original string into the new allocated memory
+	mov esi, eax					; make esi point to the new string as well now
 	
-	push edi
-	call String_length
-	add esp,4
-	mov dl, al
+	push edi						; push substring
+	call String_length              ; ... so we can get the length of it
+	add esp,4                       ;
+	mov dl, al                      ; move the length into dl
 	
 	mov eax, esi
 	
 checkFirstChar:
-	mov ecx, esi
-	mov bl, byte ptr [edi]			
-	.If (byte ptr [esi] >= 97 && byte ptr [esi] <= 122)
-		.If (bl >= 65 && bl <= 90)
-			add bl, 32
-		.EndIf
-	.ElseIf (byte ptr [esi] >= 65 && byte ptr [esi] <= 90)
-		.If (bl >= 97 && bl <= 122)
-			sub bl, 32
-		.EndIf
-	.EndIf
+	mov ecx, esi											; copy the pointer of the string into ecx
+	mov bl, byte ptr [edi]									; move the character of the first index of substring into bl
+	.If (byte ptr [esi] >= 97 && byte ptr [esi] <= 122)		; check if the current character of the main string is not capitalized
+		.If (bl >= 65 && bl <= 90)							; 	if it is, and our substring character isn't...
+			add bl, 32										;	...change it to match
+		.EndIf												;
+	.ElseIf (byte ptr [esi] >= 65 && byte ptr [esi] <= 90)	; otherwise if the current character IS capitalized...
+		.If (bl >= 97 && bl <= 122)							;	then we check if the substring isn't
+			sub bl, 32										;	...if it isn't, make it match
+		.EndIf												;
+	.EndIf													;	this way, comparisons are all case IN-sensitive
 	
-	.If (byte ptr [esi] == 0)
-		jmp returnResults
-	.ElseIf (byte ptr [esi] == bl)
-		jmp checkNext
-	.EndIf
-	inc esi
-	jmp checkFirstChar
-	
+	.If (byte ptr [esi] == 0)								; if the byte in the main string is zero...
+		jmp returnResults									;	we are at the end, so return
+	.ElseIf (byte ptr [esi] == bl)							; if the byte matches the substring character...
+		jmp checkNext										;	jump to check the next character
+	.EndIf													; if these aren't true, nothing matches so far....
+	inc esi													; ... so we increment the main string to look at next character
+	jmp checkFirstChar										; jmp back to begin again
+
 checkNext:
-	inc esi
-	inc edi
-	mov bl, byte ptr [edi]
-	.If (byte ptr [esi] >= 97 && byte ptr [esi] <= 122)
-		.If (bl >= 65 && bl <= 90)
-			add bl, 32
-		.EndIf
-	.ElseIf (byte ptr [esi] >= 65 && byte ptr [esi] <= 90)
-		.If (bl >= 97 && bl <= 122)
-			sub bl, 32
-		.EndIf
-	.EndIf
+	inc esi													; inc esi, look at next char in main string
+	inc edi													; inc edi, look at next char in substring
+	mov bl, byte ptr [edi]									; move the character of the first index of substring into bl          
+	.If (byte ptr [esi] >= 97 && byte ptr [esi] <= 122)		; check if the current character of the main string is not capitalized
+		.If (bl >= 65 && bl <= 90)							; 	if it is, and our substring character isn't...                  
+			add bl, 32										;	...change it to match                                            
+		.EndIf												;                                                                     
+	.ElseIf (byte ptr [esi] >= 65 && byte ptr [esi] <= 90)	; otherwise if the current character IS capitalized...                
+		.If (bl >= 97 && bl <= 122)							;	then we check if the substring isn't                             
+			sub bl, 32										;	...if it isn't, make it match                                    
+		.EndIf												;                                                                     
+	.EndIf													;	this way, comparisons are all case IN-sensitive                  
 	
-	.If (byte ptr [edi] == 0)
-		inc bh						; increase counter
-		jmp substringFound			; jump to deal with the substring
-	.ElseIf (byte ptr [esi] == bl)
-		jmp checkNext
-	.EndIf
-	mov edi, charStr
-	jmp checkFirstChar
-		
+	.If (byte ptr [edi] == 0)								;	if the substring char is a null terminator, we found a substring!
+		inc bh												; increase counter
+		jmp substringFound									; jump to deal with the substring found
+	.ElseIf (byte ptr [esi] == bl)							;	otherwise if the characters at least match, we still MIGHT have a match
+		jmp checkNext										; so jump to check the next chaaracter
+	.EndIf													;
+	mov edi, charStr										; if we didn't find a match, we mov edi back to the beginning of the sub string
+	jmp checkFirstChar										; then jump back to check the first character again
+			
 substringFound:
 	mov dh, dl
-	.while (dh > 0)
-		.if (byte ptr [ecx] >= 97 && byte ptr [ecx] <= 122)
-			sub byte ptr [ecx], 32
-		.endif
-		inc ecx
-		dec dh
+	.while (dh > 0)											; since we found our substring, copy dl (length of substring) into dh
+		.if (byte ptr [ecx] >= 97 && byte ptr [ecx] <= 122)	; loop through dh, and check if the character is lowercase
+			sub byte ptr [ecx], 32							;	if so, subtract 32, to make characters in substring uppercase!
+		.endif												;
+		inc ecx												; increment ecx (which character in main string we're changing)
+		dec dh												; decrement dh to say we changed another character in the substring
 	.endw
 	
-	mov edi, charStr
-	jmp checkFirstChar
-	; starting at ecx, make next n letters capitals
+	mov edi, charStr										; when we changed the whole substring, reset edi back to beginning of substring
+	jmp checkFirstChar										; jmp to go check the first character of the string again.
 
 returnResults:
-	mov bl, bh
-	mov bh, 0
+	mov bl, bh												; copy the amount of substrings found into bl
+	mov bh, 0												; reset bh to 0
 
 	pop edx
 	pop ecx
