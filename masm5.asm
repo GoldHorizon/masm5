@@ -67,6 +67,16 @@ extern String_indexOf_1:Near32, String_indexOf_2:Near32, String_indexOf_3:Near32
 ;****************;
 ; *** MACROS *** ;
 ;****************;
+mPrintNumber macro num:req
+	local strNum
+	.data
+	strNum				byte	16 dup(0)
+	.code
+	invoke intasc32, addr strNum, num
+	invoke putstring, addr strNum
+	
+endm
+
 mStrLength macro string:req
 	push offset string
 	call String_length
@@ -81,30 +91,43 @@ mStrMove macro srcStr:req, dstStr:req
 endm
 
 mGetNumber macro number:req
-	local strInputNum, strGetNumber, strError, begin, finish
+	local strInputNum, strGetNumber, strError, begin, finish, strOOB
 	.data
-	strInputNum				byte	2 dup(0)
+	strInputNum				byte	16 dup(0)
 	strGetNumber			byte	"Please enter your choice: ",0
 	strError				byte	13,10,"ERROR: Please enter a number: ",0
+	strOOB					byte	13,10,"ERROR: Index out of bounds. Enter a number: ",0
 	.code
 begin:
 ;	invoke putstring, addr strGetNumber				; output first input message
-	invoke getstring, addr strInputNum, 1			; call getInput and store input in strSecondNum
+	invoke getstring, addr strInputNum, 15			; call getInput and store input in strSecondNum
 	invoke ascint32, addr strInputNum
 	jnc finish
 	invoke putstring, addr strError
 	jmp begin
 	
 finish:
-	mov number, eax	
-	invoke putstring, addr _newl
+	.if (eax < STRING_ARRAY_SIZE)
+		mov number, eax	
+		invoke putstring, addr _newl
+	.else
+		invoke putstring, addr strOOB
+		jmp begin
+	.endif
 endm
+
+;********************;
+; *** END MACROS *** ;
+;********************;
+
+; *** CONSTANTS *** ;
+STRING_ARRAY_SIZE = 15
 
 	.data ; Start of the data for the driver
 ; *PROGRAM DATA*
 ; Heap
 hHeap					handle	?
-lpStrings				dword	10	dup(?)
+lpStrings				dword	STRING_ARRAY_SIZE	dup(?)
 
 ; Number variables
 strFirst				byte	128 dup(?)
@@ -329,17 +352,17 @@ ViewAllStrings PROC
 	push ebx									 	; pushes registers being used 
 	push ecx										;
 	
-	mov bl, 30h										; moves 0 (30h) in to bl, used for counter
+	mov ebx, 0										; moves 0 in to ebx, used for counter
 	
 	mov ecx, 0										; moves 0 in to ecx for while loop
 	
 	invoke putstring, addr _newl					; output new line
 		
-	.WHILE (ecx < 40)								; start while, output line for each string 
+	.WHILE (ecx < (STRING_ARRAY_SIZE * 4))								; start while, output line for each string 
 	
 	
 	mWrite "["
-	invoke putch, bl								; output count from 0-9
+	mPrintNumber ebx
 	mWrite "] "
 	
 	.If ([lpStrings+ecx] != 0)						; will only output string if it exists
@@ -349,7 +372,7 @@ ViewAllStrings PROC
 	invoke putstring, addr _newl					; output new line
 	
 	add ecx, 4										; increments eax by 4
-	inc bl											; increments count for output
+	inc ebx											; increments count for output
 	
 	.ENDW											; end while
 
@@ -376,7 +399,7 @@ AddString PROC
 	
 	mov ebx, 0										; moves 0 in to ebx 
 	
-	.WHILE(ebx < 10)								; loops through each index of string 10 times to check if empty
+	.WHILE(ebx < STRING_ARRAY_SIZE)								; loops through each index of string array to check if empty
 		.If([lpStrings + (ebx * 4)] == 0)			; if string is empty, jumps to input new string
 			jmp inputString							;	
 		.Else										; else, increment ebx to check next string
@@ -500,7 +523,7 @@ MemoryConsumption PROC
 	mov ecx, 0										; which string we're looking at
 	mov ebx, 0										; how many bytes we've counted so far
 
-	.while (ecx < 10)								; while our index < 10...
+	.while (ecx < STRING_ARRAY_SIZE)								; while our index < array size...
 		.if ([lpStrings + (ecx * 4)] != 0)			; if the string we're looking at isn't empty...
 			inc ebx									; then, inc ebx to count the null terminator
 
@@ -652,7 +675,7 @@ SearchString PROC
 
 	mov esi, esp
 
-	.while (edx <= 10)								; while we're looking at one of the 10  strings....
+	.while (edx <= STRING_ARRAY_SIZE)								; while we're looking at one of the strings....
 		.if ([lpStrings + (edx * 4)] != 0)			; ...if the string isn't empty... 
 			push offset strNewString				;
 			push [lpStrings + (edx * 4)]			; ... then we search through it for the substring using String_find
