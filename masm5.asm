@@ -121,7 +121,7 @@ endm
 ;********************;
 
 ; *** CONSTANTS *** ;
-STRING_ARRAY_SIZE = 15
+STRING_ARRAY_SIZE = 9999
 
 	.data ; Start of the data for the driver
 ; *PROGRAM DATA*
@@ -451,7 +451,6 @@ chooseNumber:
 	mGetNumber intStringChoice								; get a single number as input from the user
 	mov ebx, eax											; copy the input number into ebx
 	mov ecx, ebx											; ...as well as ecx
-	add ecx, 30h											; ...then add 30h to ecx (for the ascii equivalent)
 	push ecx
 
 	mov eax, [lpStrings + (ebx * 4)]						; copies the address of the specified string into eax
@@ -496,7 +495,7 @@ delete:
 		invoke putstring, addr _newl
 		mWrite "SUCCESSFULLY DELETE STRING ["       		;
 		pop ecx
-		invoke putch, cl                            		; print that we successfully deleted the string (with string number)
+		mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
 		mWrite "] "                                 		;
 		invoke putstring, addr _newl
 
@@ -569,7 +568,6 @@ chooseNumber:
 	mGetNumber intStringChoice							; get a single number as input from the user
 	mov ebx, eax										; copy the input number into ebx
 	mov ecx, ebx										; ...as well as ecx
-	add ecx, 30h										; ...then add 30h to ecx (for the ascii equivalent)
 	push ecx	
 	
 	mov eax, [lpStrings + (ebx * 4)]					; copies the address of the specified string into eax
@@ -590,7 +588,7 @@ getInput1:
 		.Endif	
 	.Else	
 		mWrite "["										;
-		invoke putch, cl                            	; print the number of string we're editing
+		mPrintNumber ecx
 		mWrite "] "                                 	;
 		invoke putstring, [lpStrings + (ebx * 4)]   	; print the string
 		invoke putstring, addr strConfirmEdit  			; print a message to confirm edit of string
@@ -610,7 +608,7 @@ edit:
 	invoke putstring, addr _newl						
 	mWrite "["											;
 	pop ecx												;
-	invoke putch, cl                           			; print the number of string we're editing
+	mPrintNumber ecx
 	push ecx											;
 	mWrite "] "                               			;
 		
@@ -641,7 +639,7 @@ edit:
 			
 	invoke putstring, addr _newl							
 	mWrite "SUCCESSFULLY EDITED STRING ["   	       	;  
-	invoke putch, cl                         	       	; print that we successfully deleted the string (with string number)
+	mPrintNumber ecx
 	mWrite "] "                              	       	;  
 														
 	.Endif                                             	
@@ -667,7 +665,8 @@ SearchString PROC
 	pushad											; push all registers to save them
 
 	mov ecx, 0										; sets our counter to 0
-	mov edx, 9										; sets which string we're looking at in the array
+	mov edx, STRING_ARRAY_SIZE						; sets which string we're looking at in the array
+	dec edx
 	
 	invoke putstring, addr strGetTargetString		; print prompt to get a substring to search for
 	invoke getstring, addr strNewString, dLimitNum	; call getInput and store input in strSecondNum
@@ -701,17 +700,14 @@ SearchString PROC
 		invoke putstring, addr _newl
 	.else
 		mWrite " successfully found "				; otherwise, output how many strings we found.
-		add ecx, 30h								;
-		invoke putch, cl							; cl holds how many substrings were found
+		mPrintNumber ecx
 		mWrite " times:"							;
 		invoke putstring, addr _newl				;
 		
 		.while (esi != esp)							; while there is still something on the stack...
 			pop edx									; pop edx to print the string number
-
-			add edx, 30h							; add 30h to it to make it ascii
 			mWrite "["								;
-			invoke putch, dl						; print the number
+			mPrintNumber edx
 			mWrite "] "								;
 			pop eax									; pop eax to get the address for the string
 			invoke putstring, eax					; print the string to the screen, with capitalized substrings found
