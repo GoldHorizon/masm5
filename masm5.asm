@@ -134,7 +134,7 @@ endm
 ;********************;
 
 ; *** CONSTANTS *** ;
-STRING_ARRAY_SIZE = 9999
+STRING_ARRAY_SIZE = 20
 
 	.data ; Start of the data for the driver
 ; *PROGRAM DATA*
