@@ -2,11 +2,9 @@
 ;						 																		;
 ;  	 Name: Nick Francke	and Jacqueline Kubiak													;
 ;   Class: CS3B MW 12 PM																		;
-;     Lab: MASM3																				;
-;    Date: 4/19/17																				;
+;     Lab: MASM5																				;
+;    Date: 5/15/17																				;
 ; Purpose:																						;
-;	This program is a driver to test all of the string procedures written for masm3.			;
-;	It uses the procedures found in _string1.asm and _string2.asm.								;
 ;																								;
 ;***********************************************************************************************;
 
@@ -56,9 +54,9 @@ include Macros.inc
 
 ;include /masm32/include/kernel32.inc
 ;include /masm32/include/masm32.inc
-includelib kernel32.lib
-includelib masm32.lib
-includelib user32.lib
+includelib /masm32/lib/kernel32.lib
+includelib /masm32/lib/masm32.lib
+includelib /masm32/lib/user32.lib
 includelib Irvine32.lib
 
 ; Tell the program each of these procedures are found in a different file.
@@ -150,10 +148,8 @@ strMainMenu3			byte	"<3> Delete string",13,10,0
 strMainMenu4			byte	"<4> Edit string",13,10,0
 strMainMenu5			byte	"<5> String search",13,10,0
 strMainMenu6			byte	"<6> String Array Memory Consumption",13,10,0
-strMainMenu7			byte	"<7> Quit",13,10,13,10,0
-
-brack1					byte 	"[",0
-brack2					byte 	"] ",0
+strMainMenu7			byte 	"<7> Append File",13,10,0
+strMainMenu8			byte	"<8> Quit",13,10,13,10,0
 
 intInputNum				dword	?
 intStringChoice			dword	?
@@ -198,6 +194,7 @@ mainMenu:
 	invoke putstring, addr strMainMenu5						;
 	invoke putstring, addr strMainMenu6						;
 	invoke putstring, addr strMainMenu7						;
+	invoke putstring, addr strMainMenu8						;
 	
 	mWrite "Please enter your choice: "						; prompts user to enter index of string to edit 
 	mGetNumber intInputNum
@@ -220,8 +217,11 @@ mainMenu:
 	.ElseIf (intInputNum == 6)                              ; if user enters 6: call string array memory consumption
 		invoke putstring, addr strMainMenu6                 ;
 		call MemoryConsumption                              ;
-	.ElseIf (intInputNum == 7)                              ; if user enters 7: end program
+	.ElseIf (intInputNum == 7)                              ; if user enters 7: call append file
 		invoke putstring, addr strMainMenu7                 ;
+		;call AppendFile		                            ;
+	.ElseIf (intInputNum == 8)                              ; if user enters 8: end program
+		invoke putstring, addr strMainMenu8                 ;
 		jmp endProgram                                      ;
 	.Endif                                                  ;
 	
