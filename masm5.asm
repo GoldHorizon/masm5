@@ -67,6 +67,10 @@ extern String_indexOf_1:Near32, String_indexOf_2:Near32, String_indexOf_3:Near32
 ;****************;
 ; *** MACROS *** ;
 ;****************;
+
+;
+; mPrintNumber
+;
 mPrintNumber macro num:req
 	local strNum
 	.data
@@ -77,12 +81,18 @@ mPrintNumber macro num:req
 	
 endm
 
+;
+; mGetLength
+;
 mStrLength macro string:req
 	push offset string
 	call String_length
 	add esp, 4
 endm
 
+;
+; mStrMove
+;
 mStrMove macro srcStr:req, dstStr:req
 	push dstStr
 	push srcStr
@@ -90,6 +100,9 @@ mStrMove macro srcStr:req, dstStr:req
 	add esp, 8
 endm
 
+;
+; mGetNumber
+;
 mGetNumber macro number:req
 	local strInputNum, strGetNumber, strError, begin, finish, strOOB
 	.data
