@@ -379,7 +379,6 @@ ViewAllStrings PROC
 		
 	.WHILE (ecx < (STRING_ARRAY_SIZE * 4))								; start while, output line for each string 
 	
-	
 	mWrite "["
 	mPrintNumber ebx
 	mWrite "] "
