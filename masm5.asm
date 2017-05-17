@@ -134,7 +134,7 @@ endm
 ;********************;
 
 ; *** CONSTANTS *** ;
-STRING_ARRAY_SIZE = 20
+STRING_ARRAY_SIZE = 200
 
 	.data ; Start of the data for the driver
 ; *PROGRAM DATA*
@@ -217,8 +217,13 @@ begin:
 	mov ecx,0												; ecx acts as our input loop counter
 	mov edx,0												; edx will keep track of which input we are getting
 	
-	invoke HeapCreate, 0, 0, 2560
+	invoke HeapCreate, 0, 0, STRING_ARRAY_SIZE * 256
 	mov hHeap, eax
+
+	.if (eax == 0)
+		mWrite "ERROR: Not enough memory! Quitting program..."
+		jmp endProgram
+	.endif
 
 mainMenu:
 
@@ -362,11 +367,12 @@ ViewAllStrings PROC
 
 	enter 0,0
 
+	push eax										; How many strings have already been printed
 	push ebx									 	; pushes registers being used 
 	push ecx										;
-	
-	mov ebx, 0										; moves 0 in to ebx, used for counter
-	
+
+	mov eax, 0
+	mov ebx, 0										; moves 0 in to ebx, used for string counter
 	mov ecx, 0										; moves 0 in to ecx for while loop
 	
 	invoke putstring, addr _newl					; output new line
@@ -381,16 +387,26 @@ ViewAllStrings PROC
 	.If ([lpStrings+ecx] != 0)						; will only output string if it exists
 	invoke putstring, dword ptr [lpStrings+ecx]		; output string
 	.Endif
+	inc eax
 	
 	invoke putstring, addr _newl					; output new line
+
+	.If (eax >= 30)
+		invoke putstring, addr strContinue						; prompts user to press any key to continue
+		invoke getch											; 
+		invoke putstring, addr _newl
+		mov eax, 0
+	.Endif
+		
 	
-	add ecx, 4										; increments eax by 4
+	add ecx, 4										; increments ecx by 4
 	inc ebx											; increments count for output
 	
 	.ENDW											; end while
 
 	pop ecx											; pops all registers we use to bring them back
 	pop ebx											;
+	pop eax
 
 	leave
 	ret
@@ -412,7 +428,7 @@ AddString PROC
 	
 	mov ebx, 0										; moves 0 in to ebx 
 	
-	.WHILE(ebx < STRING_ARRAY_SIZE)								; loops through each index of string array to check if empty
+	.WHILE(ebx < STRING_ARRAY_SIZE)					; loops through each index of string array to check if empty
 		.If([lpStrings + (ebx * 4)] == 0)			; if string is empty, jumps to input new string
 			jmp inputString							;	
 		.Else										; else, increment ebx to check next string
