@@ -64,9 +64,59 @@ extern String_equals:Near32, String_equalsIgnoreCase:Near32, String_copy:Near32,
 
 extern String_indexOf_1:Near32, String_indexOf_2:Near32, String_indexOf_3:Near32, String_lastIndexOf_1:Near32, String_lastIndexOf_2:Near32, String_lastIndexOf_3:Near32, String_concat:Near32, String_replace:Near32, String_toUpperCase:Near32, String_toLowerCase:Near32
 
+;*****************;
+; *** STRUCTS *** ;
+;*****************;
+StringNode struct
+	ptrNextNode		dword		0
+	ptrHeap			dword		0
+	ptrString		dword		0
+StringNode ends
+
 ;****************;
 ; *** MACROS *** ;
 ;****************;
+;
+; mListAddNode
+;
+mListAddNode macro stringAddr:req
+	local stringLength, return
+.data
+	stringLength	dword	?
+.code
+	pushad
+	;Create node
+	invoke HeapAlloc, hMainHeap, HEAP_ZERO_MEMORY, SIZEOF StringNode
+	.If (eax == 0)
+		mWrite "ERROR: Cannot create new node. Aborting..."
+		jmp return
+	.ElseIf (ptrListHead == 0 && ptrListTail == 0)
+		mov ptrListHead, eax
+		mov ptrListTail, eax
+	.Else
+		mov esi, ptrListTail
+		mov ptrListTail, eax
+		mov [StringNode ptr [esi]].ptrNextNode, eax
+	.EndIf
+	mov esi, eax
+
+	mStrLength stringAddr
+	inc eax
+	mov stringLength, eax
+
+	invoke HeapCreate, 0, 0, stringLength
+
+	.If (eax == 0)
+		mWrite "ERROR: Cannot allocate memory for string. Aborting..."
+		jmp return
+	.EndIf
+
+	mov [StringNode ptr[esi]].ptrHeap, eax
+	mStrMove stringAddr, [StringNode ptr[esi]].ptrString
+	
+return:
+	popad
+endm
 
 ;
 ; mPrintNumber
@@ -85,7 +135,7 @@ endm
 ; mGetLength
 ;
 mStrLength macro string:req
-	push offset string
+	push string
 	call String_length
 	add esp, 4
 endm
@@ -141,6 +191,11 @@ STRING_ARRAY_SIZE = 200
 ; Heap
 hHeap					handle	?
 lpStrings				dword	STRING_ARRAY_SIZE	dup(?)
+
+; Pure Dynamic Heap
+hMainHeap				handle	?
+ptrListHead				dword	?
+ptrListTail				dword	?
 
 ; Number variables
 strFirst				byte	128 dup(?)
@@ -224,6 +279,20 @@ begin:
 		mWrite "ERROR: Not enough memory! Quitting program..."
 		jmp endProgram
 	.endif
+
+	invoke GetProcessHeap
+	mov hMainHeap, eax
+	.If (eax == 0)
+		mWrite "ERROR: Couldn't get process heap (for linked list heap)! Quitting program..."
+		jmp endProgram
+	.EndIf
+
+	;invoke HeapCreate, 0, 0, 4000000
+	;mov hMainHeap, eax
+	;.if (eax == 0)
+	;	mWrite "ERROR: Not enough memory (for linked list heap)! Quitting program..."
+	;	jmp endProgram
+	;.endif
 
 mainMenu:
 
@@ -443,7 +512,7 @@ inputString:
 	invoke getstring, addr strNewString, dLimitNum	; call getInput and store input in strSecondNum
 	invoke putstring, addr _newl					; print a newline
 	
-	mStrLength strNewString							; get the length of the new string
+	mStrLength <offset strNewString>				; get the length of the new string
 	inc eax											; increment the size of the string to include null terminator
 
 	invoke HeapAlloc, hHeap, HEAP_ZERO_MEMORY, eax	; allocate that many bytes of memory on the main heap
@@ -501,8 +570,10 @@ getInput1:
 			jmp getInput1									;   continue to wait for input
 		.Endif
 	.Else
-		mWrite "Deleting: ["								; 
-		invoke putch, cl                            		; print the number of string we're deleting
+		mWrite "Deleting: ["								;
+		pop ecx
+		mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
+		push ecx
 		mWrite "] "                                 		;
 		invoke putstring, [lpStrings + (ebx * 4)]   		; print the string
 		invoke putstring, addr strConfirmDeletion   		; print a message to confirm deletion of string
@@ -652,7 +723,7 @@ edit:
 	mov esi, [lpStrings + (ebx * 4)]
 	invoke HeapFree, hHeap, 0, [lpStrings + (ebx * 4)] 	; free memory 
 	
-	mStrLength strNewString							   	; get the length of the new string
+	mStrLength <offset strNewString>				   	; get the length of the new string
 	inc eax											   	; increment the size of the string to include null terminator
 		
 	invoke HeapAlloc, hHeap, HEAP_ZERO_MEMORY, eax	   	; allocate that many bytes of memory on the main heap
