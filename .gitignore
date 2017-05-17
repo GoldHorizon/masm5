@@ -11,6 +11,7 @@
 
 backupMasm4.backup
 masm4.asm.orig
+compile.sh
 
 # Packages #
 ############
