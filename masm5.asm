@@ -125,13 +125,18 @@ endm
 ; mListRemoveNode
 ;
 mListRemoveNode macro index:req
-
+	local return, nodePtr
 .data
-	
+	nodePtr		dword		0
 .code
 	pushad
 	
 	mov ecx, index
+	mov nodePtr, ptrListHead
+	
+	.While (ecx > 0)
+		mov nodePtr, [StringNode
+	.Endw
 
 
 return:
