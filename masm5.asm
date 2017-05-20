@@ -76,6 +76,7 @@ StringNode ends
 ;****************;
 ; *** MACROS *** ;
 ;****************;
+
 ;
 ; mListAddNode
 ;
@@ -87,6 +88,7 @@ mListAddNode macro stringAddr:req
 	pushad
 	;Create node
 	invoke HeapAlloc, hMainHeap, HEAP_ZERO_MEMORY, SIZEOF StringNode
+	mov edi, eax
 	.If (eax == 0)
 		mWrite "ERROR: Cannot create new node. Aborting..."
 		jmp return
@@ -108,12 +110,30 @@ mListAddNode macro stringAddr:req
 
 	.If (eax == 0)
 		mWrite "ERROR: Cannot allocate memory for string. Aborting..."
+		invoke HeapFree, hMainHeap, 0, edi
 		jmp return
 	.EndIf
 
 	mov [StringNode ptr[esi]].ptrHeap, eax
 	mStrMove stringAddr, [StringNode ptr[esi]].ptrString
 	
+return:
+	popad
+endm
+
+;
+; mListRemoveNode
+;
+mListRemoveNode macro index:req
+
+.data
+	
+.code
+	pushad
+	
+	mov ecx, index
+
+
 return:
 	popad
 endm
