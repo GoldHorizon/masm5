@@ -502,7 +502,7 @@ getInput1:
 		.Endif
 	.Else
 		mWrite "Deleting: ["								; 
-		invoke putch, cl                            		; print the number of string we're deleting
+		mPrintNumber ecx                           		; print the number of string we're deleting
 		mWrite "] "                                 		;
 		invoke putstring, [lpStrings + (ebx * 4)]   		; print the string
 		invoke putstring, addr strConfirmDeletion   		; print a message to confirm deletion of string
