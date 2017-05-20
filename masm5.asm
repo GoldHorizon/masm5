@@ -87,6 +87,8 @@ mListAddNode macro stringAddr:req
 .code
 	pushad
 	;Create node
+	mov ebx, stringAddr
+	
 	invoke HeapAlloc, hMainHeap, HEAP_ZERO_MEMORY, SIZEOF StringNode
 	mov edi, eax
 	.If (eax == 0)
@@ -98,23 +100,36 @@ mListAddNode macro stringAddr:req
 	.Else
 		mov esi, ptrListTail
 		mov ptrListTail, eax
+		
+		mov ecx, [StringNode ptr [esi]].ptrNextNode
+		mov [StringNode ptr [eax]].ptrNextNode, ecx
+		
 		mov [StringNode ptr [esi]].ptrNextNode, eax
 	.EndIf
 	mov esi, eax
 
-	mStrLength stringAddr
+	mStrLength ebx
 	inc eax
 	mov stringLength, eax
 
 	invoke HeapCreate, 0, 0, stringLength
 
 	.If (eax == 0)
-		mWrite "ERROR: Cannot allocate memory for string. Aborting..."
+		mWrite "ERROR: Cannot allocate heap for string. Aborting..."
 		invoke HeapFree, hMainHeap, 0, edi
 		jmp return
 	.EndIf
 
 	mov [StringNode ptr[esi]].ptrHeap, eax
+	
+	;Allocate the memory (DONE)
+	invoke HeapAlloc, eax, HEAP_ZERO_MEMORY, stringLength
+	.If (eax == 0)
+		mWrite "ERROR: Cannot allocate memory for string. Aborting..."
+		invoke HeapFree, hMainHeap, 0, edi
+		jmp return
+	.EndIf
+	mov [StringNode ptr [esi]].ptrString, eax
 	mStrMove stringAddr, [StringNode ptr[esi]].ptrString
 	
 return:
@@ -125,19 +140,57 @@ endm
 ; mListRemoveNode
 ;
 mListRemoveNode macro index:req
-	local return, nodePtr
+	local return, nodePtr, outputError
 .data
 	nodePtr		dword		0
 .code
 	pushad
 	
 	mov ecx, index
-	mov nodePtr, ptrListHead
+	mov eax, ptrListHead
+	mov nodePtr, eax
+	mov esi, nodePtr
+	mov edx, 0
 	
 	.While (ecx > 0)
-		mov nodePtr, [StringNode
+	
+		mov eax, [StringNode ptr [esi]].ptrNextNode
+		mov nodePtr, eax
+		
+		.If (nodePtr == 0)
+			jmp outputError
+		.EndIf
+		
+		dec ecx
+		mov edx, esi
+		mov esi, nodePtr
 	.Endw
+	
+	.If (esi == ptrListHead)
+		mov edi, [StringNode ptr [esi]].ptrNextNode
+		.If (esi == ptrListTail)
+			mov ptrListTail, edi
+		.EndIf
+		mov ptrListHead, edi
+	.ElseIf (esi == ptrListTail)
+		mov [StringNode ptr [edx]].ptrNextNode, 0
+		mov ptrListTail, edx
+	.Else
+		mov edi, [StringNode ptr [esi]].ptrNextNode
+		mov [StringNode ptr [edx]].ptrNextNode, edi
+		;mov ptrListTail, edx
+	.EndIf
+	
+	;Free string memory as well
+	invoke HeapFree, [StringNode ptr[esi]].ptrHeap, 0, [StringNode ptr[esi]].ptrString
+	invoke HeapDestroy, [StringNode ptr[esi]].ptrHeap
+	
+	invoke HeapFree, hMainHeap, 0, esi	; Free memory on that address of the string
+	
+	jmp return
 
+outputError:
+	mWrite "ERROR: index out of bounds. Aborting..."
 
 return:
 	popad
@@ -464,6 +517,7 @@ ViewAllStrings PROC
 	push eax										; How many strings have already been printed
 	push ebx									 	; pushes registers being used 
 	push ecx										;
+	push esi										;
 
 	mov eax, 0
 	mov ebx, 0										; moves 0 in to ebx, used for string counter
@@ -471,32 +525,51 @@ ViewAllStrings PROC
 	
 	invoke putstring, addr _newl					; output new line
 		
-	.WHILE (ecx < (STRING_ARRAY_SIZE * 4))								; start while, output line for each string 
+	;.WHILE (ecx < (STRING_ARRAY_SIZE * 4))								; start while, output line for each string 
+	;
+	;mWrite "["
+	;mPrintNumber ebx
+	;mWrite "] "
+	;
+	;.If ([lpStrings+ecx] != 0)						; will only output string if it exists
+	;invoke putstring, dword ptr [lpStrings+ecx]		; output string
+	;.Endif
+	;inc eax
+	;
+	;invoke putstring, addr _newl					; output new line
+    ;
+	;.If (eax >= 30)
+	;	invoke putstring, addr strContinue						; prompts user to press any key to continue
+	;	invoke getch											; 
+	;	invoke putstring, addr _newl
+	;	mov eax, 0
+	;.Endif
+	;	
+	;
+	;add ecx, 4										; increments ecx by 4
+	;inc ebx											; increments count for output
+	;
+	;.ENDW											; end while
 	
-	mWrite "["
-	mPrintNumber ebx
-	mWrite "] "
 	
-	.If ([lpStrings+ecx] != 0)						; will only output string if it exists
-	invoke putstring, dword ptr [lpStrings+ecx]		; output string
-	.Endif
-	inc eax
 	
-	invoke putstring, addr _newl					; output new line
-
-	.If (eax >= 30)
-		invoke putstring, addr strContinue						; prompts user to press any key to continue
-		invoke getch											; 
-		invoke putstring, addr _newl
-		mov eax, 0
-	.Endif
+	
+	;PURE MEMORY STUFF
+	mov esi, ptrListHead
+	.While (esi != 0)
+		mWrite "["
+		mPrintNumber ecx
+		inc ecx
+		mWrite "] "
 		
-	
-	add ecx, 4										; increments ecx by 4
-	inc ebx											; increments count for output
-	
-	.ENDW											; end while
+		invoke putstring, [StringNode ptr[esi]].ptrString
+		invoke putstring, addr _newl
+		
+		mov esi, [StringNode ptr[esi]].ptrNextNode
+		
+	.Endw
 
+	pop esi
 	pop ecx											; pops all registers we use to bring them back
 	pop ebx											;
 	pop eax
@@ -521,32 +594,35 @@ AddString PROC
 	
 	mov ebx, 0										; moves 0 in to ebx 
 	
-	.WHILE(ebx < STRING_ARRAY_SIZE)					; loops through each index of string array to check if empty
-		.If([lpStrings + (ebx * 4)] == 0)			; if string is empty, jumps to input new string
-			jmp inputString							;	
-		.Else										; else, increment ebx to check next string
-			inc ebx									;
-		.EndIf
-	.ENDW
-	
-	invoke putstring, addr strShowFullMsg			; outputs string full error message
-	jmp return										; jump to return
+	;.WHILE(ebx < STRING_ARRAY_SIZE)					; loops through each index of string array to check if empty
+	;	.If([lpStrings + (ebx * 4)] == 0)			; if string is empty, jumps to input new string
+	;		jmp inputString							;	
+	;	.Else										; else, increment ebx to check next string
+	;		inc ebx									;
+	;	.EndIf
+	;.ENDW
+	;
+	;invoke putstring, addr strShowFullMsg			; outputs string full error message
+	;jmp return										; jump to return
 	
 inputString:
 	mWrite "Enter new string (Max 127 characters): "; prompts user to enter index to add string
 	invoke getstring, addr strNewString, dLimitNum	; call getInput and store input in strSecondNum
 	invoke putstring, addr _newl					; print a newline
 	
-	mStrLength <offset strNewString>				; get the length of the new string
-	inc eax											; increment the size of the string to include null terminator
-
-	invoke HeapAlloc, hHeap, HEAP_ZERO_MEMORY, eax	; allocate that many bytes of memory on the main heap
-	mov [lpStrings + (ebx * 4)], eax				; copy the address of the memory location allocated into appropriate array index
-
-	push eax										; 
-	push offset strNewString						; 
-	call String_move								; call string move to move our new string into the new memory location
-	add esp, 8										;
+	;mStrLength <offset strNewString>				; get the length of the new string
+	;inc eax											; increment the size of the string to include null terminator
+    ;
+	;invoke HeapAlloc, hHeap, HEAP_ZERO_MEMORY, eax	; allocate that many bytes of memory on the main heap
+	;mov [lpStrings + (ebx * 4)], eax				; copy the address of the memory location allocated into appropriate array index
+    ;
+	;push eax										; 
+	;push offset strNewString						; 
+	;call String_move								; call string move to move our new string into the new memory location
+	;add esp, 8										;
+	
+	; PURE MEMORY STUFF
+	mListAddNode <offset strNewString>
 		
 return:
 	popad											; restore all registers from the stack
@@ -567,63 +643,74 @@ RemoveString PROC
 	enter 0, 0												; push ebp and move esp into ebp
 	pushad													; push all registers to save them
 	
+	.If (ptrListHead == 0 && ptrListTail == 0)
+		mWrite "ERROR: Cannot delete from empty list. Aborting..."
+		invoke putstring, addr _newl
+		jmp return
+	.EndIf
+	
 chooseNumber:
 	invoke putstring, addr _newl							; print a newline 
 	mWrite "Please enter string index to delete: "			; prompts user to enter index of string to delete
 	mGetNumber intStringChoice								; get a single number as input from the user
-	mov ebx, eax											; copy the input number into ebx
-	mov ecx, ebx											; ...as well as ecx
-	push ecx
+	
+;	mov ebx, eax											; copy the input number into ebx
+;	mov ecx, ebx											; ...as well as ecx
+;	push ecx
 
-	mov eax, [lpStrings + (ebx * 4)]						; copies the address of the specified string into eax
+;	mov eax, [lpStrings + (ebx * 4)]						; copies the address of the specified string into eax
+;	
+;	.If (eax == 0)											; if the string they chose does not exist
+;		
+;		invoke putstring, addr strShowInvalidInput			; Output error message 
+;		invoke putstring, addr strAskNewInput				; Ask if they want to choose a different number
+;getInput1:
+;		invoke getch										; Wait for user input
+;		.If (al == 'y' || al == 'Y')						; if user inputs a 'y' or 'Y'
+;			invoke putch, al
+;			pop ecx
+;			jmp chooseNumber								; 	then jmp to choose another number
+;		.Elseif (al == 'n' || al == 'N')					; if user inputs a 'n' or 'N'
+;			invoke putch, al
+;			pop ecx
+;			jmp return										;	then jmp to return to the main function
+;		.Else												; otherwise...
+;			jmp getInput1									;   continue to wait for input
+;		.Endif
+;	.Else
+;		mWrite "Deleting: ["								;
+;		pop ecx
+;		mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
+;		push ecx
+;		mWrite "] "                                 		;
+;;		invoke putstring, [lpStrings + (ebx * 4)]   		; print the string
+;		invoke putstring, addr strConfirmDeletion   		; print a message to confirm deletion of string
+;getInput2:
+;		invoke getch										; Wait for user input
+;		.If (al == 'y' || al == 'Y')                		; if user inputs a 'y' or 'Y'
+;			jmp delete                              		; 	then jmp to delete the string
+;		.Elseif (al == 'n' || al == 'N')            		; if user inputs a 'n' or 'N'
+;			pop ecx
+;			jmp chooseNumber                        		;	then jmp to return to the main function
+;		.Else
+;			jmp getInput2
+;		.Endif                                      
+;delete:
+;		invoke HeapFree, hHeap, 0, [lpStrings + (ebx * 4)]	; Free memory on that address of the string
+;		mov [lpStrings + (ebx * 4)], 0              		; move a zero into the pointer to that string
+;
+;		
+;                     
+;		invoke putstring, addr _newl
+;		mWrite "SUCCESSFULLY DELETED STRING ["       		;
+;		pop ecx
+;		mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
+;		mWrite "] "                                 		;
+;		invoke putstring, addr _newl
+;	.Endif
+	mov intAnswer, eax
 
-	.If (eax == 0)											; if the string they chose does not exist
-		
-		invoke putstring, addr strShowInvalidInput			; Output error message 
-		invoke putstring, addr strAskNewInput				; Ask if they want to choose a different number
-getInput1:
-		invoke getch										; Wait for user input
-		.If (al == 'y' || al == 'Y')						; if user inputs a 'y' or 'Y'
-			invoke putch, al
-			pop ecx
-			jmp chooseNumber								; 	then jmp to choose another number
-		.Elseif (al == 'n' || al == 'N')					; if user inputs a 'n' or 'N'
-			invoke putch, al
-			pop ecx
-			jmp return										;	then jmp to return to the main function
-		.Else												; otherwise...
-			jmp getInput1									;   continue to wait for input
-		.Endif
-	.Else
-		mWrite "Deleting: ["								;
-		pop ecx
-		mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
-		push ecx
-		mWrite "] "                                 		;
-		invoke putstring, [lpStrings + (ebx * 4)]   		; print the string
-		invoke putstring, addr strConfirmDeletion   		; print a message to confirm deletion of string
-getInput2:
-		invoke getch										; Wait for user input
-		.If (al == 'y' || al == 'Y')                		; if user inputs a 'y' or 'Y'
-			jmp delete                              		; 	then jmp to delete the string
-		.Elseif (al == 'n' || al == 'N')            		; if user inputs a 'n' or 'N'
-			pop ecx
-			jmp chooseNumber                        		;	then jmp to return to the main function
-		.Else
-			jmp getInput2
-		.Endif                                      
-delete:
-		invoke HeapFree, hHeap, 0, [lpStrings + (ebx * 4)]	; Free memory on that address of the string
-		mov [lpStrings + (ebx * 4)], 0              		; move a zero into the pointer to that string
-                     
-		invoke putstring, addr _newl
-		mWrite "SUCCESSFULLY DELETE STRING ["       		;
-		pop ecx
-		mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
-		mWrite "] "                                 		;
-		invoke putstring, addr _newl
-
-	.Endif
+	mListRemoveNode intAnswer
 
 return:
 	popad													; restore all registers from the stack
