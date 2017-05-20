@@ -80,15 +80,35 @@ StringNode ends
 ;
 ; mListAddNode
 ;
-mListAddNode macro stringAddr:req
-	local stringLength, return
+mListAddNode macro stringAddr:req, index:=<-1>
+	local stringLength, return, insertNode, tempIndex
 .data
 	stringLength	dword	?
+	tempIndex		dword	0
 .code
 	pushad
 	;Create node
+	mov tempIndex, index
 	mov ebx, stringAddr
+	mov ebp, 0
 	
+	.If (tempIndex != -1 && tempIndex != 0 && ptrListHead != 0 && ptrListTail != 0)
+		mov ebp, ptrListHead
+		mov ecx, tempIndex
+		
+		dec ecx
+		
+		.While (ecx > 0)
+			.If ([StringNode ptr[ebp]].ptrNextNode == 0)
+				jmp insertNode
+			.EndIf
+			dec ecx
+			mov ebp, [StringNode ptr[ebp]].ptrNextNode
+			
+		.Endw
+	.EndIf
+	
+insertNode:
 	invoke HeapAlloc, hMainHeap, HEAP_ZERO_MEMORY, SIZEOF StringNode
 	mov edi, eax
 	.If (eax == 0)
@@ -98,13 +118,21 @@ mListAddNode macro stringAddr:req
 		mov ptrListHead, eax
 		mov ptrListTail, eax
 	.Else
-		mov esi, ptrListTail
-		mov ptrListTail, eax
-		
-		mov ecx, [StringNode ptr [esi]].ptrNextNode
-		mov [StringNode ptr [eax]].ptrNextNode, ecx
-		
-		mov [StringNode ptr [esi]].ptrNextNode, eax
+		.If (tempIndex == -1)
+			mov esi, ptrListTail
+			mov ptrListTail, eax
+			mov ecx, [StringNode ptr [esi]].ptrNextNode
+			mov [StringNode ptr [eax]].ptrNextNode, ecx
+			mov [StringNode ptr [esi]].ptrNextNode, eax
+		.ElseIf (tempIndex == 0)
+			mov esi, ptrListHead
+			mov ptrListHead, eax
+			mov [StringNode ptr [eax]].ptrNextNode, esi
+		.Else
+			mov esi, [StringNode ptr [ebp]].ptrNextNode
+			mov [StringNode ptr [ebp]].ptrNextNode, eax
+			mov [StringNode ptr [eax]].ptrNextNode, esi
+		.EndIf
 	.EndIf
 	mov esi, eax
 
@@ -131,6 +159,8 @@ mListAddNode macro stringAddr:req
 	.EndIf
 	mov [StringNode ptr [esi]].ptrString, eax
 	mStrMove stringAddr, [StringNode ptr[esi]].ptrString
+	
+	inc listSize
 	
 return:
 	popad
@@ -187,6 +217,7 @@ mListRemoveNode macro index:req
 	
 	invoke HeapFree, hMainHeap, 0, esi	; Free memory on that address of the string
 	
+	dec listSize
 	jmp return
 
 outputError:
@@ -229,6 +260,34 @@ mStrMove macro srcStr:req, dstStr:req
 endm
 
 ;
+; mGetMenuNumber
+;
+mGetMenuNumber macro number:req
+	local strInputNum, strGetNumber, strError, begin, finish, strOOB
+	.data
+	strInputNum				byte	16 dup(0)
+	strGetNumber			byte	"Please enter your choice: ",0
+	strError				byte	13,10,"ERROR: Please enter a number: ",0
+	strOOB					byte	13,10,"ERROR: Index out of bounds. Enter a number: ",0
+	.code
+begin:
+;	invoke putstring, addr strGetNumber				; output first input message
+	invoke getstring, addr strInputNum, 15			; call getInput and store input in strSecondNum
+	invoke ascint32, addr strInputNum
+	jnc finish
+	invoke putstring, addr strError
+	jmp begin
+	
+finish:
+	.if (eax < 9)
+		mov number, eax	
+		invoke putstring, addr _newl
+	.else
+		invoke putstring, addr strOOB
+		jmp begin
+	.endif
+endm
+;
 ; mGetNumber
 ;
 mGetNumber macro number:req
@@ -248,7 +307,7 @@ begin:
 	jmp begin
 	
 finish:
-	.if (eax < STRING_ARRAY_SIZE)
+	.if (eax < listSize)
 		mov number, eax	
 		invoke putstring, addr _newl
 	.else
@@ -274,6 +333,7 @@ lpStrings				dword	STRING_ARRAY_SIZE	dup(?)
 hMainHeap				handle	?
 ptrListHead				dword	?
 ptrListTail				dword	?
+listSize				dword	0
 
 ; Number variables
 strFirst				byte	128 dup(?)
@@ -385,7 +445,7 @@ mainMenu:
 	invoke putstring, addr strMainMenu8						;
 	
 	mWrite "Please enter your choice: "						; prompts user to enter index of string to edit 
-	mGetNumber intInputNum
+	mGetMenuNumber intInputNum
 	
 	.If (intInputNum == 1)                                  ; if user enters 1: call view all strings
 		invoke putstring, addr strMainMenu1                 ;
@@ -778,82 +838,89 @@ chooseNumber:
 	mWrite "Please enter string index to edit: "		; prompts user to enter index of string to edit 
 	mGetNumber intStringChoice							; get a single number as input from the user
 	mov ebx, eax										; copy the input number into ebx
-	mov ecx, ebx										; ...as well as ecx
-	push ecx	
+;	mov ecx, ebx										; ...as well as ecx
+
+
+;	push ecx	
 	
-	mov eax, [lpStrings + (ebx * 4)]					; copies the address of the specified string into eax
+	;mov eax, [lpStrings + (ebx * 4)]					; copies the address of the specified string into eax
 	
-	.If (eax == 0)										; if the string they chose does not exist
-		invoke putstring, addr strShowInvalidInput		; Output error message 
-		invoke putstring, addr strAskNewInput			; Ask if they want to choose a different number
-getInput1:	
-		invoke getche									; Wait for user input
-		.If (al == 'y' || al == 'Y')					; if user inputs a 'y' or 'Y'
-			pop ecx	
-			jmp chooseNumber							; 	then jmp to choose another number
-		.Elseif (al == 'n' || al == 'N')				; if user inputs a 'n' or 'N'
-			pop ecx	
-			jmp return									;	then jmp to return to the main function
-		.Else											; otherwise...
-			jmp getInput1								;   continue to wait for input
-		.Endif	
-	.Else	
-		mWrite "["										;
-		mPrintNumber ecx
-		mWrite "] "                                 	;
-		invoke putstring, [lpStrings + (ebx * 4)]   	; print the string
-		invoke putstring, addr strConfirmEdit  			; print a message to confirm edit of string
-getInput2:	
-		invoke getch									; Wait for user input
-		.If (al == 'y' || al == 'Y')                	; if user inputs a 'y' or 'Y'
-			invoke putch, al
-			jmp edit                              		; 	then jmp to edit the string
-		.Elseif (al == 'n' || al == 'N')            	; if user inputs a 'n' or 'N'
-			invoke putch, al
-			pop ecx	
-			jmp chooseNumber                        	;	then jmp to return to the main function
-		.Else
-			jmp getInput2
-		.Endif                                      	                                
-edit:	
-	invoke putstring, addr _newl						
-	mWrite "["											;
-	pop ecx												;
-	mPrintNumber ecx
-	push ecx											;
-	mWrite "] "                               			;
-		
-	push [lpStrings + (ebx * 4)]						; push the addres of the string to edit
-	call getInput										; begin editing the string
-	add esp, 4											;
+;	.If (eax == 0)										; if the string they chose does not exist
+;		invoke putstring, addr strShowInvalidInput		; Output error message 
+;		invoke putstring, addr strAskNewInput			; Ask if they want to choose a different number
+;getInput1:	
+;		invoke getche									; Wait for user input
+;		.If (al == 'y' || al == 'Y')					; if user inputs a 'y' or 'Y'
+;			pop ecx	
+;			jmp chooseNumber							; 	then jmp to choose another number
+;		.Elseif (al == 'n' || al == 'N')				; if user inputs a 'n' or 'N'
+;			pop ecx	
+;			jmp return									;	then jmp to return to the main function
+;		.Else											; otherwise...
+;			jmp getInput1								;   continue to wait for input
+;		.Endif	
+;	.Else	
+;		mWrite "["										;
+;		mPrintNumber ecx
+;		mWrite "] "                                 	;
+;		invoke putstring, [lpStrings + (ebx * 4)]   	; print the string
+;		invoke putstring, addr strConfirmEdit  			; print a message to confirm edit of string
+;getInput2:	
+;		invoke getch									; Wait for user input
+;		.If (al == 'y' || al == 'Y')                	; if user inputs a 'y' or 'Y'
+;			invoke putch, al
+;			jmp edit                              		; 	then jmp to edit the string
+;		.Elseif (al == 'n' || al == 'N')            	; if user inputs a 'n' or 'N'
+;			invoke putch, al
+;			pop ecx	
+;			jmp chooseNumber                        	;	then jmp to return to the main function
+;		.Else
+;			jmp getInput2
+;		.Endif                                      	                                
+;edit:	
+;	invoke putstring, addr _newl						
+;	mWrite "["											;
+;	pop ecx												;
+;	mPrintNumber ecx
+;	push ecx											;
+;	mWrite "] "                               			;
+;		
+;	push [lpStrings + (ebx * 4)]						; push the addres of the string to edit
+;	call getInput										; begin editing the string
+;	add esp, 4											;
 	
-	;invoke getstring, addr strNewString, dLimitNum	   	; call getInput and store input in strSecondNum
-		
-	invoke putstring, addr _newl					   	; print a newline
+	mWrite "Enter new string: "
+	invoke putstring, addr _newl
+	invoke getstring, addr strNewString, dLimitNum	   	; call getInput and store input in strSecondNum
+
+	mListRemoveNode ebx
+	mListAddNode <offset strNewString>, ebx
 	
-	
-	mov esi, [lpStrings + (ebx * 4)]
-	invoke HeapFree, hHeap, 0, [lpStrings + (ebx * 4)] 	; free memory 
-	
-	mStrLength <offset strNewString>				   	; get the length of the new string
-	inc eax											   	; increment the size of the string to include null terminator
-		
-	invoke HeapAlloc, hHeap, HEAP_ZERO_MEMORY, eax	   	; allocate that many bytes of memory on the main heap
-	mov [lpStrings + (ebx * 4)], eax				   	; copy the address of the memory location allocated into appropriate array index
-					
-	push eax		                                   	                                     
-	push offset strNewString						   	; 
-	call String_move								   	; call string move to move our new string into the new memory location
-	add esp, 8	                                       	
+;	invoke putstring, addr _newl					   	; print a newline
+;	
+;	
+;	mov esi, [lpStrings + (ebx * 4)]
+;	invoke HeapFree, hHeap, 0, [lpStrings + (ebx * 4)] 	; free memory 
+;	
+;	mStrLength <offset strNewString>				   	; get the length of the new string
+;	inc eax											   	; increment the size of the string to include null terminator
+;		
+;	invoke HeapAlloc, hHeap, HEAP_ZERO_MEMORY, eax	   	; allocate that many bytes of memory on the main heap
+;	mov [lpStrings + (ebx * 4)], eax				   	; copy the address of the memory location allocated into appropriate array index
+;					
+;	push eax		                                   	                                     
+;	push offset strNewString						   	; 
+;	call String_move								   	; call string move to move our new string into the new memory location
+;	add esp, 8	                                       	
+;														
+;	pop ecx 	
+;			
+;	invoke putstring, addr _newl							
+;	mWrite "SUCCESSFULLY EDITED STRING ["   	       	;  
+;	mPrintNumber ecx
+;	mWrite "] "                              	       	;  
 														
-	pop ecx 	
-			
-	invoke putstring, addr _newl							
-	mWrite "SUCCESSFULLY EDITED STRING ["   	       	;  
-	mPrintNumber ecx
-	mWrite "] "                              	       	;  
-														
-	.Endif                                             	
+;	.Endif                                             	
 														
 return:                                                	
 	popad											   	; restore all registers from the stack
