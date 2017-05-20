@@ -1031,10 +1031,10 @@ buf_size_ok:
 			add esp, 8										;	
 		
 			pop edx
-			add esi, edx
 			.If (byte ptr [[esi] + edx] == 0ah)
 				inc esi
 			.EndIf
+			add esi, edx
 			mov edx, 0
 		.ElseIf (byte ptr[[esi]+edx] == 0)
 			jmp close_file
