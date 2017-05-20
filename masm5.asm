@@ -135,17 +135,27 @@ endm
 
 ; *** CONSTANTS *** ;
 STRING_ARRAY_SIZE = 200
+BUFFER_SIZE 	  = 5000
 
 	.data ; Start of the data for the driver
+	
 ; *PROGRAM DATA*
 ; Heap
 hHeap					handle	?
 lpStrings				dword	STRING_ARRAY_SIZE	dup(?)
 
+; file data
+
+buffer 					BYTE BUFFER_SIZE DUP(?)
+filename				BYTE "output.txt", 0
+fileHandle				HANDLE ?
+
+
 ; Number variables
 strFirst				byte	128 dup(?)
 intSize					dword	?
 dLimitNum				dword	127
+tempPtr					dword	?		
 
 ; ###########
 
@@ -163,17 +173,7 @@ strShowFullMsg			byte 	"**ERROR String Manager is FULL, please delete a string b
 strAskNewInput			byte	"Would you like to enter a new input? Y/N: ",0
 strGetTargetString		byte	"Please enter the target string: ",0
 strConfirmDeletion		byte	" CONFIRM DELETION Y/N: ",0
-;strAskEdit				byte 	"Please enter string index to edit: ",0
 strConfirmEdit			byte	" CONFIRM EDIT Y/N: ", 0
-;strSuccessfulEdit		byte 	"SUCCESSFULLY EDITED STRING",0
-
-;strShowEqual			byte	"Equal!", 0
-;strShowNotEqual		byte	"Not Equal!", 0
-;strShowFound			byte	"Found!", 0
-;strShowNotFound		byte	"Not Found!", 0
-;strShowLength			byte	"The length of the string is: ",0
-;strShowIndex			byte	"The character was at index: ",0
-;strShowStrIndex		byte	"The substring was at index: ",0
 strContinue				byte 	10,"Press any key to continue...", 0
 strShowFinalMsg			byte	13,10,"Thanks for using my program!",13,10,13,10,0
 
@@ -191,7 +191,7 @@ intInputNum				dword	?
 intStringChoice			dword	?
 
 ; *HEADER DATA*
-_header		byte	9," Name: Nick Francke and Jacqueline Kubiak",13,10,\			;_header - String for the program header.
+_header		byte	9," Name: Nick Francke and Jacqueline Kubiak",13,10,\	;_header - String for the program header.
 					9,"Class: CS3B MW 12 PM",13,10,\
 					9,"  Lab: MASM3",13,10,\
 					9," Date: 4/19/17",13,10,10,0
@@ -260,7 +260,7 @@ mainMenu:
 		call MemoryConsumption                              ;
 	.ElseIf (intInputNum == 7)                              ; if user enters 7: call append file
 		invoke putstring, addr strMainMenu7                 ;
-		;call AppendFile		                            ;
+		call AppendFile		                            	;
 	.ElseIf (intInputNum == 8)                              ; if user enters 8: end program
 		invoke putstring, addr strMainMenu8                 ;
 		jmp endProgram                                      ;
@@ -932,5 +932,123 @@ returnResults:
 	leave
 	ret
 String_find endp
+
+;****************************************************************
+;* Name: AppendFile							            		*
+;* Purpose:														*
+;*		Appends file											*
+;* Date created: May 17, 2017									*
+;* Date last modified: May 17 , 2017							*
+;****************************************************************%
+AppendFile PROC
+	enter 0, 0							; push ebp and move esp into ebp
+	pushad								; push all registers to save them
+	
+	mov ecx, 0							; which string we're looking at
+	mov ebx, 0							; how many bytes we've counted so far
+;	mov edx, 0
+
+; Let user input a filename.
+;	mWrite "Enter an input filename: "
+;	mov	edx,OFFSET filename
+;	mov	ecx,SIZEOF filename
+;	call	ReadString
+
+; Open the file for input.
+	mov	edx, OFFSET filename								;
+	call	 OpenInputFile									;
+	mov	fileHandle,eax										;
+					
+; Check for errors.					
+	cmp	eax, INVALID_HANDLE_VALUE							; error opening file?
+	jne	file_ok												; no: skip
+	mWrite <"Cannot open file",0dh,0ah>					
+	jmp	return												; and quit
+	
+file_ok:										
+; Read the file into a buffer.					
+	mov	edx, OFFSET buffer									;
+	mov	ecx, BUFFER_SIZE									;
+	call	 ReadFromFile									;
+	jnc	check_buffer_size									; error reading?
+	mWrite "Error reading file. "							; yes: show error message
+	call	WriteWindowsMsg					
+	jmp	close_file					
+						
+check_buffer_size:					
+	cmp	eax,BUFFER_SIZE										; buffer large enough?
+	jb	buf_size_ok											; yes
+	mWrite <"Error: Buffer too small for the file",0dh,0ah>	;
+	jmp	close_file											; and quit
+						
+buf_size_ok:						
+	mov	buffer[eax],0										; insert null terminator
+	invoke putstring, addr _newl							; insert new line
+	mWrite "File size: "									;
+	call	WriteDec										; display file size
+	call	Crlf					
+					
+; Display the buffer.					
+	mWrite <"Buffer:",0dh,0ah,0dh,0ah>						;
+	mov	edx, OFFSET buffer									; display the buffer
+	call	 WriteString									;
+	call	 Crlf	
+
+; Add string
+	mov ecx, eax
+	
+	mov eax, offset buffer
+	mov esi, eax
+	
+	mov edx, 0
+	mov ebx, 0
+	
+	.while(edx <= ecx)										; while counter is less than or equal to file size
+	
+		.while(ebx < STRING_ARRAY_SIZE)						; loops through each index of string array to check if empty
+			.If([lpStrings + (ebx * 4)] == 0)				; if string is empty, jumps to input new string
+				jmp inputString								;	
+			.Else											; else, increment ebx to check next string
+				inc ebx										;
+			.EndIf
+		.endw
+		
+		invoke putstring, addr strShowFullMsg				; outputs string full error message
+		jmp close_file										; jump to return
+		
+		inputString:
+		.If (byte ptr[[esi]+edx] == 0dh)							; if return character
+			mov byte ptr[[esi]+edx], 0							; null terminator
+			
+			inc edx											; increments edx for null terminator
+				
+			invoke HeapAlloc, hHeap, HEAP_ZERO_MEMORY, edx	; allocate that many bytes of memory on the main heap
+			mov [lpStrings + (ebx * 4)], eax				; copy the address of the memory location allocated into appropriate array 
+			
+			push eax										; 
+			push esi									; 
+			call String_move								; call string move to move our new string into the new memory location
+			add esp, 8										;	
+		
+			add esi, edx
+			mov edx, 0
+		.ElseIf (byte ptr[[esi]+edx] == 0)
+			jmp close_file
+		.Else 												;	
+			inc edx											; increment edx
+		.EndIf												;
+	.endw													; end while
+	
+	
+close_file:					
+	mov	eax,fileHandle										; 
+	call	CloseFile										;
+					
+return:					
+	popad													; restore all registers from the stack
+	leave                              						; restore esp and pop ebp
+	ret					
+  
+AppendFile ENDP
 
 end			; End of program
