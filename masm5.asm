@@ -1017,7 +1017,7 @@ buf_size_ok:
 		jmp close_file										; jump to return
 		
 		inputString:
-		.If (byte ptr[[esi]+edx] == 0dh)					; if return character
+		.If (byte ptr[[esi]+edx] == 0dh || byte ptr[[esi]+edx] == 0ah)					; if return character
 			mov byte ptr[[esi]+edx], 0						; null terminator
 			
 			inc  edx										; increments edx for null terminator
@@ -1031,8 +1031,10 @@ buf_size_ok:
 			add esp, 8										;	
 		
 			pop edx
-			inc edx
 			add esi, edx
+			.If (byte ptr [[esi] + edx] == 0ah)
+				inc esi
+			.EndIf
 			mov edx, 0
 		.ElseIf (byte ptr[[esi]+edx] == 0)
 			jmp close_file
