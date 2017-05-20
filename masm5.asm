@@ -1017,19 +1017,21 @@ buf_size_ok:
 		jmp close_file										; jump to return
 		
 		inputString:
-		.If (byte ptr[[esi]+edx] == 0dh)							; if return character
-			mov byte ptr[[esi]+edx], 0							; null terminator
+		.If (byte ptr[[esi]+edx] == 0dh)					; if return character
+			mov byte ptr[[esi]+edx], 0						; null terminator
 			
-			inc edx											; increments edx for null terminator
-				
+			inc  edx										; increments edx for null terminator
+			push edx
 			invoke HeapAlloc, hHeap, HEAP_ZERO_MEMORY, edx	; allocate that many bytes of memory on the main heap
 			mov [lpStrings + (ebx * 4)], eax				; copy the address of the memory location allocated into appropriate array 
 			
 			push eax										; 
-			push esi									; 
+			push esi										; 
 			call String_move								; call string move to move our new string into the new memory location
 			add esp, 8										;	
 		
+			pop edx
+			inc edx
 			add esi, edx
 			mov edx, 0
 		.ElseIf (byte ptr[[esi]+edx] == 0)
@@ -1041,8 +1043,8 @@ buf_size_ok:
 	
 	
 close_file:					
-	mov	eax,fileHandle										; 
-	call	CloseFile										;
+	mov	eax, fileHandle										; 
+	call	 CloseFile										;
 					
 return:					
 	popad													; restore all registers from the stack
