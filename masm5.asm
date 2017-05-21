@@ -172,42 +172,42 @@ endm
 mListRemoveNode macro index:req
 	local return, nodePtr, outputError
 .data
-	nodePtr		dword		0
+	nodePtr		dword		0							; Pointer to the current node
 .code
 	pushad
 	
-	mov ecx, index
-	mov eax, ptrListHead
-	mov nodePtr, eax
-	mov esi, nodePtr
-	mov edx, 0
-	
-	.While (ecx > 0)
-	
-		mov eax, [StringNode ptr [esi]].ptrNextNode
-		mov nodePtr, eax
+	mov ecx, index										;
+	mov eax, ptrListHead								;
+	mov nodePtr, eax									;
+	mov esi, nodePtr									;
+	mov edx, 0											;
+
+	.While (ecx > 0)									;
+
+		mov eax, [StringNode ptr [esi]].ptrNextNode		;
+		mov nodePtr, eax								;
 		
-		.If (nodePtr == 0)
-			jmp outputError
-		.EndIf
+		.If (nodePtr == 0)								;
+			jmp outputError								;
+		.EndIf											;
 		
-		dec ecx
-		mov edx, esi
-		mov esi, nodePtr
+		dec ecx											;
+		mov edx, esi									;
+		mov esi, nodePtr								;
 	.Endw
 	
-	.If (esi == ptrListHead)
-		mov edi, [StringNode ptr [esi]].ptrNextNode
-		.If (esi == ptrListTail)
-			mov ptrListTail, edi
+	.If (esi == ptrListHead)							;
+		mov edi, [StringNode ptr [esi]].ptrNextNode		;
+		.If (esi == ptrListTail)						;
+			mov ptrListTail, edi						;
 		.EndIf
-		mov ptrListHead, edi
-	.ElseIf (esi == ptrListTail)
-		mov [StringNode ptr [edx]].ptrNextNode, 0
-		mov ptrListTail, edx
+		mov ptrListHead, edi							;
+	.ElseIf (esi == ptrListTail)						;
+		mov [StringNode ptr [edx]].ptrNextNode, 0		;
+		mov ptrListTail, edx							;
 	.Else
-		mov edi, [StringNode ptr [esi]].ptrNextNode
-		mov [StringNode ptr [edx]].ptrNextNode, edi
+		mov edi, [StringNode ptr [esi]].ptrNextNode		;
+		mov [StringNode ptr [edx]].ptrNextNode, edi		;
 		;mov ptrListTail, edx
 	.EndIf
 	
@@ -241,10 +241,10 @@ mPrintNumber macro num:req
 endm
 
 ;
-; mGetLength
+; mStrLength
 ;
-mStrLength macro string:req
-	push string
+mStrLength macro stringAddr:req
+	push stringAddr
 	call String_length
 	add esp, 4
 endm
@@ -713,6 +713,7 @@ chooseNumber:
 	invoke putstring, addr _newl							; print a newline 
 	mWrite "Please enter string index to delete: "			; prompts user to enter index of string to delete
 	mGetNumber intStringChoice								; get a single number as input from the user
+	mov intAnswer, eax
 	
 ;	mov ebx, eax											; copy the input number into ebx
 ;	mov ecx, ebx											; ...as well as ecx
@@ -758,7 +759,8 @@ chooseNumber:
 ;delete:
 ;		invoke HeapFree, hHeap, 0, [lpStrings + (ebx * 4)]	; Free memory on that address of the string
 ;		mov [lpStrings + (ebx * 4)], 0              		; move a zero into the pointer to that string
-;
+
+	mListRemoveNode intAnswer
 ;		
 ;                     
 ;		invoke putstring, addr _newl
@@ -768,9 +770,7 @@ chooseNumber:
 ;		mWrite "] "                                 		;
 ;		invoke putstring, addr _newl
 ;	.Endif
-	mov intAnswer, eax
 
-	mListRemoveNode intAnswer
 
 return:
 	popad													; restore all registers from the stack
@@ -790,22 +790,32 @@ MemoryConsumption PROC
 	enter 0, 0										; push ebp and move esp into ebp
 	pushad											; push all registers to save them
 	
-	mov ecx, 0										; which string we're looking at
 	mov ebx, 0										; how many bytes we've counted so far
 
-	.while (ecx < STRING_ARRAY_SIZE)								; while our index < array size...
-		.if ([lpStrings + (ecx * 4)] != 0)			; if the string we're looking at isn't empty...
-			inc ebx									; then, inc ebx to count the null terminator
-
-			push [lpStrings + (ecx * 4)]			; 
-			call String_length						; also find the length of that string
-			add esp,4								;
-
-			add ebx, eax							; ...and add it to the total as well
-		.endif
-
-		inc ecx										; then increment which string we're looking at with ecx
-	.endw
+;	.while (ecx < STRING_ARRAY_SIZE)								; while our index < array size...
+;		.if ([lpStrings + (ecx * 4)] != 0)			; if the string we're looking at isn't empty...
+;			inc ebx									; then, inc ebx to count the null terminator
+;
+;			push [lpStrings + (ecx * 4)]			; 
+;			call String_length						; also find the length of that string
+;			add esp,4								;
+;
+;			add ebx, eax							; ...and add it to the total as well
+;		.endif
+;
+;		inc ecx										; then increment which string we're looking at with ecx
+;	.endw
+	
+	mov esi, ptrListHead
+	.While (esi != 0)
+		inc ebx
+		
+		mStrLength <[StringNode ptr [esi]].ptrString>
+		add ebx, eax
+		
+		mov esi, [StringNode ptr[esi]].ptrNextNode
+		
+	.Endw
 
 	invoke intasc32, addr strNewString, ebx			; convert the number of bytes to a string
 
