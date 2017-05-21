@@ -322,6 +322,7 @@ endm
 
 ; *** CONSTANTS *** ;
 STRING_ARRAY_SIZE = 200
+BUFFER_SIZE 	  = 5000
 
 	.data ; Start of the data for the driver
 ; *PROGRAM DATA*
@@ -334,11 +335,18 @@ hMainHeap				handle	?
 ptrListHead				dword	?
 ptrListTail				dword	?
 listSize				dword	0
+; file data
+
+buffer 					BYTE BUFFER_SIZE DUP(?)
+filename				BYTE "output.txt", 0
+fileHandle				HANDLE ?
+
 
 ; Number variables
 strFirst				byte	128 dup(?)
 intSize					dword	?
 dLimitNum				dword	127
+tempPtr					dword	?		
 
 ; ###########
 
@@ -467,7 +475,7 @@ mainMenu:
 		call MemoryConsumption                              ;
 	.ElseIf (intInputNum == 7)                              ; if user enters 7: call append file
 		invoke putstring, addr strMainMenu7                 ;
-		;call AppendFile		                            ;
+		call AppendFile		                            	;
 	.ElseIf (intInputNum == 8)                              ; if user enters 8: end program
 		invoke putstring, addr strMainMenu8                 ;
 		jmp endProgram                                      ;
@@ -797,6 +805,7 @@ MemoryConsumption PROC
 	enter 0, 0										; push ebp and move esp into ebp
 	pushad											; push all registers to save them
 	
+	mov ecx, 0										; which string we're looking at
 	mov ebx, 0										; how many bytes we've counted so far
 
 ;	.while (ecx < STRING_ARRAY_SIZE)								; while our index < array size...
@@ -1239,5 +1248,127 @@ returnResults:
 	leave
 	ret
 String_find endp
+
+;****************************************************************
+;* Name: AppendFile							            		*
+;* Purpose:														*
+;*		Appends file											*
+;* Date created: May 17, 2017									*
+;* Date last modified: May 17 , 2017							*
+;****************************************************************%
+AppendFile PROC
+	enter 0, 0							; push ebp and move esp into ebp
+	pushad								; push all registers to save them
+	
+	mov ecx, 0							; which string we're looking at
+	mov ebx, 0							; how many bytes we've counted so far
+;	mov edx, 0
+
+; Let user input a filename.
+;	mWrite "Enter an input filename: "
+;	mov	edx,OFFSET filename
+;	mov	ecx,SIZEOF filename
+;	call	ReadString
+
+; Open the file for input.
+	mov	edx, OFFSET filename								;
+	call	 OpenInputFile									;
+	mov	fileHandle,eax										;
+					
+; Check for errors.					
+	cmp	eax, INVALID_HANDLE_VALUE							; error opening file?
+	jne	file_ok												; no: skip
+	mWrite <"Cannot open file",0dh,0ah>					
+	jmp	return												; and quit
+	
+file_ok:										
+; Read the file into a buffer.					
+	mov	edx, OFFSET buffer									;
+	mov	ecx, BUFFER_SIZE									;
+	call	 ReadFromFile									;
+	jnc	check_buffer_size									; error reading?
+	mWrite "Error reading file. "							; yes: show error message
+	call	WriteWindowsMsg					
+	jmp	close_file					
+						
+check_buffer_size:					
+	cmp	eax,BUFFER_SIZE										; buffer large enough?
+	jb	buf_size_ok											; yes
+	mWrite <"Error: Buffer too small for the file",0dh,0ah>	;
+	jmp	close_file											; and quit
+						
+buf_size_ok:						
+	mov	buffer[eax],0										; insert null terminator
+	invoke putstring, addr _newl							; insert new line
+	mWrite "File size: "									;
+	call	WriteDec										; display file size
+	call	Crlf					
+					
+; Display the buffer.					
+	mWrite <"Buffer:",0dh,0ah,0dh,0ah>						;
+	mov	edx, OFFSET buffer									; display the buffer
+	call	 WriteString									;
+	call	 Crlf	
+
+; Add string
+	mov ecx, eax
+	
+	mov eax, offset buffer
+	mov esi, eax
+	
+	mov edx, 0
+	mov ebx, 0
+	
+	.while(edx <= ecx)										; while counter is less than or equal to file size
+	
+		.while(ebx < STRING_ARRAY_SIZE)						; loops through each index of string array to check if empty
+			.If([lpStrings + (ebx * 4)] == 0)				; if string is empty, jumps to input new string
+				jmp inputString								;	
+			.Else											; else, increment ebx to check next string
+				inc ebx										;
+			.EndIf
+		.endw
+		
+		invoke putstring, addr strShowFullMsg				; outputs string full error message
+		jmp close_file										; jump to return
+		
+		inputString:
+		.If (byte ptr[[esi]+edx] == 0dh || byte ptr[[esi]+edx] == 0ah)					; if return character
+			mov byte ptr[[esi]+edx], 0						; null terminator
+			
+			inc  edx										; increments edx for null terminator
+			push edx
+			invoke HeapAlloc, hHeap, HEAP_ZERO_MEMORY, edx	; allocate that many bytes of memory on the main heap
+			mov [lpStrings + (ebx * 4)], eax				; copy the address of the memory location allocated into appropriate array 
+			
+			push eax										; 
+			push esi										; 
+			call String_move								; call string move to move our new string into the new memory location
+			add esp, 8										;	
+		
+			pop edx
+			.If (byte ptr [[esi] + edx] == 0ah)
+				inc esi
+			.EndIf
+			add esi, edx
+			mov edx, 0
+		.ElseIf (byte ptr[[esi]+edx] == 0)
+			jmp close_file
+		.Else 												;	
+			inc edx											; increment edx
+		.EndIf												;
+	.endw													; end while
+	
+	
+close_file:					
+	mov	eax, fileHandle										; 
+	call	 CloseFile										;
+					
+return:					
+	popad													; restore all registers from the stack
+	leave                              						; restore esp and pop ebp
+	ret					
+  
+AppendFile ENDP
 
 end			; End of program
