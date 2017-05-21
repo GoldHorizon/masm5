@@ -376,7 +376,7 @@ strMainMenu2			byte	"<2> Add string",13,10,0
 strMainMenu3			byte	"<3> Delete string",13,10,0
 strMainMenu4			byte	"<4> Edit string",13,10,0
 strMainMenu5			byte	"<5> String search",13,10,0
-strMainMenu6			byte	"<6> String Array Memory Consumption",13,10,0
+strMainMenu6			byte	"<6> String List Memory Consumption",13,10,0
 strMainMenu7			byte 	"<7> Append File",13,10,0
 strMainMenu8			byte	"<8> Quit",13,10,13,10,0
 
@@ -462,7 +462,7 @@ mainMenu:
 	.ElseIf (intInputNum == 5)                              ; if user enters 5: call search string
 		invoke putstring, addr strMainMenu5                 ;
 		call SearchString
-	.ElseIf (intInputNum == 6)                              ; if user enters 6: call string array memory consumption
+	.ElseIf (intInputNum == 6)                              ; if user enters 6: call string list memory consumption
 		invoke putstring, addr strMainMenu6                 ;
 		call MemoryConsumption                              ;
 	.ElseIf (intInputNum == 7)                              ; if user enters 7: call append file
@@ -583,6 +583,12 @@ ViewAllStrings PROC
 	mov ebx, 0										; moves 0 in to ebx, used for string counter
 	mov ecx, 0										; moves 0 in to ecx for while loop
 	
+	.If (ptrListHead == 0 && ptrListTail == 0)
+		mWrite "List is empty!"
+		invoke putstring, addr _newl
+		jmp return
+	.EndIf
+	
 	invoke putstring, addr _newl					; output new line
 		
 	;.WHILE (ecx < (STRING_ARRAY_SIZE * 4))								; start while, output line for each string 
@@ -633,6 +639,7 @@ ViewAllStrings PROC
 	pop ecx											; pops all registers we use to bring them back
 	pop ebx											;
 	pop eax
+return:
 
 	leave
 	ret
@@ -654,7 +661,7 @@ AddString PROC
 	
 	mov ebx, 0										; moves 0 in to ebx 
 	
-	;.WHILE(ebx < STRING_ARRAY_SIZE)					; loops through each index of string array to check if empty
+	;.WHILE(ebx < STRING_ARRAY_SIZE)					; loops through each index of string list to check if empty
 	;	.If([lpStrings + (ebx * 4)] == 0)			; if string is empty, jumps to input new string
 	;		jmp inputString							;	
 	;	.Else										; else, increment ebx to check next string
@@ -819,9 +826,11 @@ MemoryConsumption PROC
 
 	invoke intasc32, addr strNewString, ebx			; convert the number of bytes to a string
 
-	mWrite "The String Array size: "				;
+	mWrite "The String List size: "				;
 	invoke putstring, addr strNewString				; prints the string of how many bytes are reserved
 	mWrite " bytes."								;
+	
+	invoke putstring, addr _newl
 
 return:
 	popad											; restore all registers from the stack
@@ -842,7 +851,13 @@ MemoryConsumption ENDP
 EditString PROC
 	enter 0, 0											; pushes ebp and moves esp into ebp
 	pushad												; push all registers to save them
-		
+	
+	.If (ptrListHead == 0 && ptrListTail == 0)
+		mWrite "ERROR: List is empty, cannot edit empty list. Aborting..."
+		invoke putstring, addr _newl
+		jmp return
+	.EndIf
+	
 chooseNumber:	
 	invoke putstring, addr _newl	
 	mWrite "Please enter string index to edit: "		; prompts user to enter index of string to edit 
@@ -953,31 +968,58 @@ SearchString PROC
 	pushad											; push all registers to save them
 
 	mov ecx, 0										; sets our counter to 0
-	mov edx, STRING_ARRAY_SIZE						; sets which string we're looking at in the array
-	dec edx
+	mov edx, 0										;
+	
+	.If (ptrListHead == 0 && ptrListTail == 0)
+		mWrite "ERROR: List is empty, cannot search empty list. Aborting..."
+		invoke putstring, addr _newl
+		jmp return
+	.EndIf
 	
 	invoke putstring, addr strGetTargetString		; print prompt to get a substring to search for
 	invoke getstring, addr strNewString, dLimitNum	; call getInput and store input in strSecondNum
 	invoke putstring, addr _newl					; print a newline
 
-	mov esi, esp
-
-	.while (edx <= STRING_ARRAY_SIZE)								; while we're looking at one of the strings....
-		.if ([lpStrings + (edx * 4)] != 0)			; ...if the string isn't empty... 
-			push offset strNewString				;
-			push [lpStrings + (edx * 4)]			; ... then we search through it for the substring using String_find
-			call String_find						;
-			add esp,8								;
-
-			.if (ebx > 0)							; if we found the substring at least once,
-				add ecx, ebx						;	then we add number found to total counter
-				push eax							;	and we store the string number and string for later
-				push edx							;
-			.endif									;
-		.endif										;
-
-		dec edx										; decrement edx to look at the previous string.
-	.endw											;
+	;mov esi, esp
+	;
+	;.while (edx <= STRING_ARRAY_SIZE)				; while we're looking at one of the strings....
+	;	.if ([lpStrings + (edx * 4)] != 0)			; ...if the string isn't empty... 
+	;		push offset strNewString				;
+	;		push [lpStrings + (edx * 4)]			; ... then we search through it for the substring using String_find
+	;		call String_find						;
+	;		add esp,8								;
+    ;
+	;		.if (ebx > 0)							; if we found the substring at least once,
+	;			add ecx, ebx						;	then we add number found to total counter
+	;			push eax							;	and we store the string number and string for later
+	;			push edx							;
+	;		.endif									;
+	;	.endif										;
+    ;
+	;	dec edx										; decrement edx to look at the previous string.
+	;.endw											;
+	
+	mov esi, ptrListHead
+	
+	push esp
+	mov ebp, esp
+	mov edi, esp
+	
+	.While (esi != 0)
+		push offset strNewString
+		push [StringNode ptr [esi]].ptrString
+		call String_find
+		add esp, 8
+		
+		.if (ebx > 0)
+			add ecx, ebx
+			push edx
+			push eax
+		.endif
+		
+		mov esi, [StringNode ptr [esi]].ptrNextNode
+		inc edx
+	.Endw
 
 	mWrite """"										;
 	invoke putstring, addr strNewString				; print the substring in quotes
@@ -992,16 +1034,21 @@ SearchString PROC
 		mWrite " times:"							;
 		invoke putstring, addr _newl				;
 		
-		.while (esi != esp)							; while there is still something on the stack...
-			pop edx									; pop edx to print the string number
+		.while (ebp != esp)							; while there is still something on the stack...
+			mov edx, [ebp - 4]						;
 			mWrite "["								;
 			mPrintNumber edx
 			mWrite "] "								;
-			pop eax									; pop eax to get the address for the string
+			mov eax, [ebp - 8]
 			invoke putstring, eax					; print the string to the screen, with capitalized substrings found
 			invoke putstring, addr _newl			; 
+			
+			sub ebp, 8
 		.endw										;
 	.endif
+	
+	mov esp, edi
+	pop esp
 	
 return:
 	popad											; restore all registers from the stack
