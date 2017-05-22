@@ -691,61 +691,73 @@ chooseNumber:
 	mWrite "Please enter string index to delete: "			; prompts user to enter index of string to delete
 	mGetNumber intStringChoice								; get a single number as input from the user
 	mov intAnswer, eax
-	
-;	mov ebx, eax											; copy the input number into ebx
-;	mov ecx, ebx											; ...as well as ecx
-;	push ecx
 
+	mov ebx, eax											; copy the input number into ebx
+	mov ecx, ebx											; ...as well as ecx
+	push ecx
+
+	mov esi, ptrListHead
+	
+	.while (eax > 0)
+		.If ([StringNode ptr [esi]].ptrNextNode == 0)
+			jmp error
+		.EndIf
+		mov esi, [StringNode ptr [esi]].ptrNextNode
+		dec eax
+	.endw
+
+	jmp confirm
 ;	mov eax, [lpStrings + (ebx * 4)]						; copies the address of the specified string into eax
 ;	
 ;	.If (eax == 0)											; if the string they chose does not exist
-;		
-;		invoke putstring, addr strShowInvalidInput			; Output error message 
-;		invoke putstring, addr strAskNewInput				; Ask if they want to choose a different number
-;getInput1:
-;		invoke getch										; Wait for user input
-;		.If (al == 'y' || al == 'Y')						; if user inputs a 'y' or 'Y'
-;			invoke putch, al
-;			pop ecx
-;			jmp chooseNumber								; 	then jmp to choose another number
-;		.Elseif (al == 'n' || al == 'N')					; if user inputs a 'n' or 'N'
-;			invoke putch, al
-;			pop ecx
-;			jmp return										;	then jmp to return to the main function
-;		.Else												; otherwise...
-;			jmp getInput1									;   continue to wait for input
-;		.Endif
-;	.Else
-;		mWrite "Deleting: ["								;
-;		pop ecx
-;		mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
-;		push ecx
-;		mWrite "] "                                 		;
-;;		invoke putstring, [lpStrings + (ebx * 4)]   		; print the string
-;		invoke putstring, addr strConfirmDeletion   		; print a message to confirm deletion of string
-;getInput2:
-;		invoke getch										; Wait for user input
-;		.If (al == 'y' || al == 'Y')                		; if user inputs a 'y' or 'Y'
-;			jmp delete                              		; 	then jmp to delete the string
-;		.Elseif (al == 'n' || al == 'N')            		; if user inputs a 'n' or 'N'
-;			pop ecx
-;			jmp chooseNumber                        		;	then jmp to return to the main function
-;		.Else
-;			jmp getInput2
-;		.Endif                                      
-;delete:
-;		invoke HeapFree, hHeap, 0, [lpStrings + (ebx * 4)]	; Free memory on that address of the string
-;		mov [lpStrings + (ebx * 4)], 0              		; move a zero into the pointer to that string
+error:
+		invoke putstring, addr strShowInvalidInput			; Output error message 
+		invoke putstring, addr strAskNewInput				; Ask if they want to choose a different number
+getInput1:
+		invoke getch										; Wait for user input
+		.If (al == 'y' || al == 'Y')						; if user inputs a 'y' or 'Y'
+			invoke putch, al
+			pop ecx
+			jmp chooseNumber								; 	then jmp to choose another number
+		.Elseif (al == 'n' || al == 'N')					; if user inputs a 'n' or 'N'
+			invoke putch, al
+			pop ecx
+			jmp return										;	then jmp to return to the main function
+		.Else												; otherwise...
+			jmp getInput1									;   continue to wait for input
+		.Endif
 
+confirm:
+
+		mWrite "Deleting: ["								;
+		pop ecx
+		mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
+		push ecx
+		mWrite "] "                                 		;
+;		invoke putstring, [lpStrings + (ebx * 4)]   		; print the string
+		invoke putstring, [StringNode ptr[esi]].ptrString
+		invoke putstring, addr strConfirmDeletion   		; print a message to confirm deletion of string
+getInput2:
+		invoke getch										; Wait for user input
+		.If (al == 'y' || al == 'Y')                		; if user inputs a 'y' or 'Y'
+			jmp delete                              		; 	then jmp to delete the string
+		.Elseif (al == 'n' || al == 'N')            		; if user inputs a 'n' or 'N'
+			pop ecx
+			jmp chooseNumber                        		;	then jmp to return to the main function
+		.Else
+			jmp getInput2
+		.Endif                                      
+
+delete:
 	mListRemoveNode intAnswer
-;		
-;                     
-;		invoke putstring, addr _newl
-;		mWrite "SUCCESSFULLY DELETED STRING ["       		;
-;		pop ecx
-;		mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
-;		mWrite "] "                                 		;
-;		invoke putstring, addr _newl
+		
+                 
+	invoke putstring, addr _newl
+	mWrite "SUCCESSFULLY DELETED STRING ["       		;
+	pop ecx
+	mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
+	mWrite "] "                                 		;
+	invoke putstring, addr _newl
 ;	.Endif
 
 
