@@ -143,7 +143,7 @@ insertNode:
 	invoke HeapCreate, 0, 0, stringLength
 
 	.If (eax == 0)
-		mWrite "ERROR: Cannot allocate heap for string. Aborting..."
+		mWrite "ERROR: Cannot allocate heap for string linked list node. Aborting..."
 		invoke HeapFree, hMainHeap, 0, edi
 		jmp return
 	.EndIf
@@ -599,39 +599,13 @@ ViewAllStrings PROC
 	.EndIf
 	
 	invoke putstring, addr _newl					; output new line
-		
-	;.WHILE (ecx < (STRING_ARRAY_SIZE * 4))								; start while, output line for each string 
-	;
-	;mWrite "["
-	;mPrintNumber ebx
-	;mWrite "] "
-	;
-	;.If ([lpStrings+ecx] != 0)						; will only output string if it exists
-	;invoke putstring, dword ptr [lpStrings+ecx]		; output string
-	;.Endif
-	;inc eax
-	;
-	;invoke putstring, addr _newl					; output new line
-    ;
-	;.If (eax >= 30)
-	;	invoke putstring, addr strContinue						; prompts user to press any key to continue
-	;	invoke getch											; 
-	;	invoke putstring, addr _newl
-	;	mov eax, 0
-	;.Endif
-	;	
-	;
-	;add ecx, 4										; increments ecx by 4
-	;inc ebx											; increments count for output
-	;
-	;.ENDW											; end while
 	
-	
-	
+	mov eax, 0
 	
 	;PURE MEMORY STUFF
 	mov esi, ptrListHead
 	.While (esi != 0)
+
 		mWrite "["
 		mPrintNumber ecx
 		inc ecx
@@ -642,6 +616,15 @@ ViewAllStrings PROC
 		
 		mov esi, [StringNode ptr[esi]].ptrNextNode
 		
+		inc eax
+
+		.If (eax >= 30 && esi != 0)
+			invoke putstring, addr strContinue						; prompts user to press any key to continue
+			invoke getch											; 
+			invoke putstring, addr _newl
+			mov eax, 0
+		.Endif
+
 	.Endw
 
 	pop esi
@@ -670,32 +653,10 @@ AddString PROC
 	
 	mov ebx, 0										; moves 0 in to ebx 
 	
-	;.WHILE(ebx < STRING_ARRAY_SIZE)					; loops through each index of string list to check if empty
-	;	.If([lpStrings + (ebx * 4)] == 0)			; if string is empty, jumps to input new string
-	;		jmp inputString							;	
-	;	.Else										; else, increment ebx to check next string
-	;		inc ebx									;
-	;	.EndIf
-	;.ENDW
-	;
-	;invoke putstring, addr strShowFullMsg			; outputs string full error message
-	;jmp return										; jump to return
-	
 inputString:
 	mWrite "Enter new string (Max 127 characters): "; prompts user to enter index to add string
 	invoke getstring, addr strNewString, dLimitNum	; call getInput and store input in strSecondNum
 	invoke putstring, addr _newl					; print a newline
-	
-	;mStrLength <offset strNewString>				; get the length of the new string
-	;inc eax											; increment the size of the string to include null terminator
-    ;
-	;invoke HeapAlloc, hHeap, HEAP_ZERO_MEMORY, eax	; allocate that many bytes of memory on the main heap
-	;mov [lpStrings + (ebx * 4)], eax				; copy the address of the memory location allocated into appropriate array index
-    ;
-	;push eax										; 
-	;push offset strNewString						; 
-	;call String_move								; call string move to move our new string into the new memory location
-	;add esp, 8										;
 	
 	; PURE MEMORY STUFF
 	mListAddNode <offset strNewString>
@@ -809,20 +770,6 @@ MemoryConsumption PROC
 	mov ecx, 0										; which string we're looking at
 	mov ebx, 0										; how many bytes we've counted so far
 
-;	.while (ecx < STRING_ARRAY_SIZE)								; while our index < array size...
-;		.if ([lpStrings + (ecx * 4)] != 0)			; if the string we're looking at isn't empty...
-;			inc ebx									; then, inc ebx to count the null terminator
-;
-;			push [lpStrings + (ecx * 4)]			; 
-;			call String_length						; also find the length of that string
-;			add esp,4								;
-;
-;			add ebx, eax							; ...and add it to the total as well
-;		.endif
-;
-;		inc ecx										; then increment which string we're looking at with ecx
-;	.endw
-	
 	mov esi, ptrListHead
 	.While (esi != 0)
 		inc ebx
@@ -873,45 +820,59 @@ chooseNumber:
 	mWrite "Please enter string index to edit: "		; prompts user to enter index of string to edit 
 	mGetNumber intStringChoice							; get a single number as input from the user
 	mov ebx, eax										; copy the input number into ebx
-;	mov ecx, ebx										; ...as well as ecx
+	mov ecx, ebx										; ...as well as ecx
 
 
-;	push ecx	
+;	push ecx
+	mov esi, ptrListHead
 	
-	;mov eax, [lpStrings + (ebx * 4)]					; copies the address of the specified string into eax
-	
+	.while (eax > 0)
+		.If ([StringNode ptr [esi]].ptrNextNode == 0)
+			jmp error
+		.EndIf
+		mov esi, [StringNode ptr [esi]].ptrNextNode
+		dec eax
+	.endw
+
+	jmp confirm
+
 ;	.If (eax == 0)										; if the string they chose does not exist
-;		invoke putstring, addr strShowInvalidInput		; Output error message 
-;		invoke putstring, addr strAskNewInput			; Ask if they want to choose a different number
-;getInput1:	
-;		invoke getche									; Wait for user input
-;		.If (al == 'y' || al == 'Y')					; if user inputs a 'y' or 'Y'
-;			pop ecx	
-;			jmp chooseNumber							; 	then jmp to choose another number
-;		.Elseif (al == 'n' || al == 'N')				; if user inputs a 'n' or 'N'
-;			pop ecx	
-;			jmp return									;	then jmp to return to the main function
-;		.Else											; otherwise...
-;			jmp getInput1								;   continue to wait for input
-;		.Endif	
+error:
+		invoke putstring, addr strShowInvalidInput		; Output error message 
+		invoke putstring, addr strAskNewInput			; Ask if they want to choose a different number
+getInput1:	
+		invoke getch									; Wait for user input
+		.If (al == 'y' || al == 'Y')					; if user inputs a 'y' or 'Y'
+			invoke putch, al
+			pop ecx	
+			jmp chooseNumber							; 	then jmp to choose another number
+		.Elseif (al == 'n' || al == 'N')				; if user inputs a 'n' or 'N'
+			invoke putch, al
+			pop ecx	
+			jmp return									;	then jmp to return to the main function
+		.Else											; otherwise...
+			jmp getInput1								;   continue to wait for input
+		.Endif	
 ;	.Else	
-;		mWrite "["										;
-;		mPrintNumber ecx
-;		mWrite "] "                                 	;
-;		invoke putstring, [lpStrings + (ebx * 4)]   	; print the string
-;		invoke putstring, addr strConfirmEdit  			; print a message to confirm edit of string
-;getInput2:	
-;		invoke getch									; Wait for user input
-;		.If (al == 'y' || al == 'Y')                	; if user inputs a 'y' or 'Y'
-;			invoke putch, al
-;			jmp edit                              		; 	then jmp to edit the string
-;		.Elseif (al == 'n' || al == 'N')            	; if user inputs a 'n' or 'N'
-;			invoke putch, al
-;			pop ecx	
-;			jmp chooseNumber                        	;	then jmp to return to the main function
-;		.Else
-;			jmp getInput2
-;		.Endif                                      	                                
+confirm:
+		mWrite "["										;
+		mPrintNumber ebx
+		mWrite "] "                                 	;
+		invoke putstring, [StringNode ptr [esi]].ptrString
+		invoke putstring, addr strConfirmEdit  			; print a message to confirm edit of string
+getInput2:	
+		invoke getch									; Wait for user input
+		.If (al == 'y' || al == 'Y')                	; if user inputs a 'y' or 'Y'
+			invoke putch, al
+			jmp newString                             		; 	then jmp to edit the string
+		.Elseif (al == 'n' || al == 'N')            	; if user inputs a 'n' or 'N'
+			invoke putch, al
+			pop ecx	
+			jmp chooseNumber                        	;	then jmp to return to the main function
+		.Else
+			jmp getInput2
+		.Endif                                      	                                
+
 ;edit:	
 ;	invoke putstring, addr _newl						
 ;	mWrite "["											;
@@ -923,9 +884,11 @@ chooseNumber:
 ;	push [lpStrings + (ebx * 4)]						; push the addres of the string to edit
 ;	call getInput										; begin editing the string
 ;	add esp, 4											;
-	
-	mWrite "Enter new string: "
+
+newString:
+
 	invoke putstring, addr _newl
+	mWrite "Enter new string: "
 	invoke getstring, addr strNewString, dLimitNum	   	; call getInput and store input in strSecondNum
 
 	mListRemoveNode ebx
@@ -1035,6 +998,8 @@ SearchString PROC
 	invoke putstring, addr strNewString				; print the substring in quotes
 	mWrite """"										;
 
+	mov esi, 0
+
 	.if (ecx == 0)									; if ecx is 0, we found no strings
 		mWrite " was not found in any of the strings!"
 		invoke putstring, addr _newl
@@ -1053,6 +1018,15 @@ SearchString PROC
 			invoke putstring, eax					; print the string to the screen, with capitalized substrings found
 			invoke putstring, addr _newl			; 
 			
+			inc esi
+
+			.If (esi >= 30 && ebp != esp)
+				invoke putstring, addr strContinue						; prompts user to press any key to continue
+				invoke getch											; 
+				invoke putstring, addr _newl
+				mov esi, 0
+			.Endif
+
 			sub ebp, 8
 		.endw										;
 	.endif
