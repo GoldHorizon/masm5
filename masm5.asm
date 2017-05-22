@@ -143,7 +143,7 @@ insertNode:
 	invoke HeapCreate, 0, 0, stringLength
 
 	.If (eax == 0)
-		mWrite "ERROR: Cannot allocate heap for string. Aborting..."
+		mWrite "ERROR: Cannot allocate heap for string linked list node. Aborting..."
 		invoke HeapFree, hMainHeap, 0, edi
 		jmp return
 	.EndIf
@@ -325,6 +325,7 @@ STRING_ARRAY_SIZE = 200
 BUFFER_SIZE 	  = 5000
 
 	.data ; Start of the data for the driver
+	
 ; *PROGRAM DATA*
 ; Heap
 hHeap					handle	?
@@ -338,8 +339,16 @@ listSize				dword	0
 ; file data
 
 buffer 					BYTE BUFFER_SIZE DUP(?)
-filename				BYTE "output.txt", 0
+filename				BYTE "input.txt", 0
 fileHandle				HANDLE ?
+
+; output file data 
+
+bufSize 	 	 DWORD ($-buffer)
+errMsg 			 BYTE "Cannot create file",0dh,0ah,0
+outputFilename   BYTE "output.txt",0
+outputFileHandle DWORD ?		; handle to output file
+bytesWritten 	 DWORD ?    	; number of bytes written
 
 
 ; Number variables
@@ -353,6 +362,7 @@ tempPtr					dword	?
 byteAnswer				byte	2 dup(?)
 intAnswer				dword	?
 
+strOutput				byte 	?
 strNewString			byte	128 dup(?)
 strOutputStr			byte	31 dup(?)
 newLine30				byte	30 dup(10,13),0
@@ -364,17 +374,7 @@ strShowFullMsg			byte 	"**ERROR String Manager is FULL, please delete a string b
 strAskNewInput			byte	"Would you like to enter a new input? Y/N: ",0
 strGetTargetString		byte	"Please enter the target string: ",0
 strConfirmDeletion		byte	" CONFIRM DELETION Y/N: ",0
-;strAskEdit				byte 	"Please enter string index to edit: ",0
 strConfirmEdit			byte	" CONFIRM EDIT Y/N: ", 0
-;strSuccessfulEdit		byte 	"SUCCESSFULLY EDITED STRING",0
-
-;strShowEqual			byte	"Equal!", 0
-;strShowNotEqual		byte	"Not Equal!", 0
-;strShowFound			byte	"Found!", 0
-;strShowNotFound		byte	"Not Found!", 0
-;strShowLength			byte	"The length of the string is: ",0
-;strShowIndex			byte	"The character was at index: ",0
-;strShowStrIndex		byte	"The substring was at index: ",0
 strContinue				byte 	10,"Press any key to continue...", 0
 strShowFinalMsg			byte	13,10,"Thanks for using my program!",13,10,13,10,0
 
@@ -478,6 +478,7 @@ mainMenu:
 		call AppendFile		                            	;
 	.ElseIf (intInputNum == 8)                              ; if user enters 8: end program
 		invoke putstring, addr strMainMenu8                 ;
+		call OutputFile
 		jmp endProgram                                      ;
 	.Endif                                                  ;
 	
@@ -598,39 +599,13 @@ ViewAllStrings PROC
 	.EndIf
 	
 	invoke putstring, addr _newl					; output new line
-		
-	;.WHILE (ecx < (STRING_ARRAY_SIZE * 4))								; start while, output line for each string 
-	;
-	;mWrite "["
-	;mPrintNumber ebx
-	;mWrite "] "
-	;
-	;.If ([lpStrings+ecx] != 0)						; will only output string if it exists
-	;invoke putstring, dword ptr [lpStrings+ecx]		; output string
-	;.Endif
-	;inc eax
-	;
-	;invoke putstring, addr _newl					; output new line
-    ;
-	;.If (eax >= 30)
-	;	invoke putstring, addr strContinue						; prompts user to press any key to continue
-	;	invoke getch											; 
-	;	invoke putstring, addr _newl
-	;	mov eax, 0
-	;.Endif
-	;	
-	;
-	;add ecx, 4										; increments ecx by 4
-	;inc ebx											; increments count for output
-	;
-	;.ENDW											; end while
 	
-	
-	
+	mov eax, 0
 	
 	;PURE MEMORY STUFF
 	mov esi, ptrListHead
 	.While (esi != 0)
+
 		mWrite "["
 		mPrintNumber ecx
 		inc ecx
@@ -641,6 +616,15 @@ ViewAllStrings PROC
 		
 		mov esi, [StringNode ptr[esi]].ptrNextNode
 		
+		inc eax
+
+		.If (eax >= 30 && esi != 0)
+			invoke putstring, addr strContinue						; prompts user to press any key to continue
+			invoke getch											; 
+			invoke putstring, addr _newl
+			mov eax, 0
+		.Endif
+
 	.Endw
 
 	pop esi
@@ -669,32 +653,10 @@ AddString PROC
 	
 	mov ebx, 0										; moves 0 in to ebx 
 	
-	;.WHILE(ebx < STRING_ARRAY_SIZE)					; loops through each index of string list to check if empty
-	;	.If([lpStrings + (ebx * 4)] == 0)			; if string is empty, jumps to input new string
-	;		jmp inputString							;	
-	;	.Else										; else, increment ebx to check next string
-	;		inc ebx									;
-	;	.EndIf
-	;.ENDW
-	;
-	;invoke putstring, addr strShowFullMsg			; outputs string full error message
-	;jmp return										; jump to return
-	
 inputString:
 	mWrite "Enter new string (Max 127 characters): "; prompts user to enter index to add string
 	invoke getstring, addr strNewString, dLimitNum	; call getInput and store input in strSecondNum
 	invoke putstring, addr _newl					; print a newline
-	
-	;mStrLength <offset strNewString>				; get the length of the new string
-	;inc eax											; increment the size of the string to include null terminator
-    ;
-	;invoke HeapAlloc, hHeap, HEAP_ZERO_MEMORY, eax	; allocate that many bytes of memory on the main heap
-	;mov [lpStrings + (ebx * 4)], eax				; copy the address of the memory location allocated into appropriate array index
-    ;
-	;push eax										; 
-	;push offset strNewString						; 
-	;call String_move								; call string move to move our new string into the new memory location
-	;add esp, 8										;
 	
 	; PURE MEMORY STUFF
 	mListAddNode <offset strNewString>
@@ -729,61 +691,73 @@ chooseNumber:
 	mWrite "Please enter string index to delete: "			; prompts user to enter index of string to delete
 	mGetNumber intStringChoice								; get a single number as input from the user
 	mov intAnswer, eax
-	
-;	mov ebx, eax											; copy the input number into ebx
-;	mov ecx, ebx											; ...as well as ecx
-;	push ecx
 
+	mov ebx, eax											; copy the input number into ebx
+	mov ecx, ebx											; ...as well as ecx
+	push ecx
+
+	mov esi, ptrListHead
+	
+	.while (eax > 0)
+		.If ([StringNode ptr [esi]].ptrNextNode == 0)
+			jmp error
+		.EndIf
+		mov esi, [StringNode ptr [esi]].ptrNextNode
+		dec eax
+	.endw
+
+	jmp confirm
 ;	mov eax, [lpStrings + (ebx * 4)]						; copies the address of the specified string into eax
 ;	
 ;	.If (eax == 0)											; if the string they chose does not exist
-;		
-;		invoke putstring, addr strShowInvalidInput			; Output error message 
-;		invoke putstring, addr strAskNewInput				; Ask if they want to choose a different number
-;getInput1:
-;		invoke getch										; Wait for user input
-;		.If (al == 'y' || al == 'Y')						; if user inputs a 'y' or 'Y'
-;			invoke putch, al
-;			pop ecx
-;			jmp chooseNumber								; 	then jmp to choose another number
-;		.Elseif (al == 'n' || al == 'N')					; if user inputs a 'n' or 'N'
-;			invoke putch, al
-;			pop ecx
-;			jmp return										;	then jmp to return to the main function
-;		.Else												; otherwise...
-;			jmp getInput1									;   continue to wait for input
-;		.Endif
-;	.Else
-;		mWrite "Deleting: ["								;
-;		pop ecx
-;		mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
-;		push ecx
-;		mWrite "] "                                 		;
-;;		invoke putstring, [lpStrings + (ebx * 4)]   		; print the string
-;		invoke putstring, addr strConfirmDeletion   		; print a message to confirm deletion of string
-;getInput2:
-;		invoke getch										; Wait for user input
-;		.If (al == 'y' || al == 'Y')                		; if user inputs a 'y' or 'Y'
-;			jmp delete                              		; 	then jmp to delete the string
-;		.Elseif (al == 'n' || al == 'N')            		; if user inputs a 'n' or 'N'
-;			pop ecx
-;			jmp chooseNumber                        		;	then jmp to return to the main function
-;		.Else
-;			jmp getInput2
-;		.Endif                                      
-;delete:
-;		invoke HeapFree, hHeap, 0, [lpStrings + (ebx * 4)]	; Free memory on that address of the string
-;		mov [lpStrings + (ebx * 4)], 0              		; move a zero into the pointer to that string
+error:
+		invoke putstring, addr strShowInvalidInput			; Output error message 
+		invoke putstring, addr strAskNewInput				; Ask if they want to choose a different number
+getInput1:
+		invoke getch										; Wait for user input
+		.If (al == 'y' || al == 'Y')						; if user inputs a 'y' or 'Y'
+			invoke putch, al
+			pop ecx
+			jmp chooseNumber								; 	then jmp to choose another number
+		.Elseif (al == 'n' || al == 'N')					; if user inputs a 'n' or 'N'
+			invoke putch, al
+			pop ecx
+			jmp return										;	then jmp to return to the main function
+		.Else												; otherwise...
+			jmp getInput1									;   continue to wait for input
+		.Endif
 
+confirm:
+
+		mWrite "Deleting: ["								;
+		pop ecx
+		mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
+		push ecx
+		mWrite "] "                                 		;
+;		invoke putstring, [lpStrings + (ebx * 4)]   		; print the string
+		invoke putstring, [StringNode ptr[esi]].ptrString
+		invoke putstring, addr strConfirmDeletion   		; print a message to confirm deletion of string
+getInput2:
+		invoke getch										; Wait for user input
+		.If (al == 'y' || al == 'Y')                		; if user inputs a 'y' or 'Y'
+			jmp delete                              		; 	then jmp to delete the string
+		.Elseif (al == 'n' || al == 'N')            		; if user inputs a 'n' or 'N'
+			pop ecx
+			jmp chooseNumber                        		;	then jmp to return to the main function
+		.Else
+			jmp getInput2
+		.Endif                                      
+
+delete:
 	mListRemoveNode intAnswer
-;		
-;                     
-;		invoke putstring, addr _newl
-;		mWrite "SUCCESSFULLY DELETED STRING ["       		;
-;		pop ecx
-;		mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
-;		mWrite "] "                                 		;
-;		invoke putstring, addr _newl
+		
+                 
+	invoke putstring, addr _newl
+	mWrite "SUCCESSFULLY DELETED STRING ["       		;
+	pop ecx
+	mPrintNumber ecx                          		; print that we successfully deleted the string (with string number)
+	mWrite "] "                                 		;
+	invoke putstring, addr _newl
 ;	.Endif
 
 
@@ -808,20 +782,6 @@ MemoryConsumption PROC
 	mov ecx, 0										; which string we're looking at
 	mov ebx, 0										; how many bytes we've counted so far
 
-;	.while (ecx < STRING_ARRAY_SIZE)								; while our index < array size...
-;		.if ([lpStrings + (ecx * 4)] != 0)			; if the string we're looking at isn't empty...
-;			inc ebx									; then, inc ebx to count the null terminator
-;
-;			push [lpStrings + (ecx * 4)]			; 
-;			call String_length						; also find the length of that string
-;			add esp,4								;
-;
-;			add ebx, eax							; ...and add it to the total as well
-;		.endif
-;
-;		inc ecx										; then increment which string we're looking at with ecx
-;	.endw
-	
 	mov esi, ptrListHead
 	.While (esi != 0)
 		inc ebx
@@ -872,45 +832,59 @@ chooseNumber:
 	mWrite "Please enter string index to edit: "		; prompts user to enter index of string to edit 
 	mGetNumber intStringChoice							; get a single number as input from the user
 	mov ebx, eax										; copy the input number into ebx
-;	mov ecx, ebx										; ...as well as ecx
+	mov ecx, ebx										; ...as well as ecx
 
 
-;	push ecx	
+;	push ecx
+	mov esi, ptrListHead
 	
-	;mov eax, [lpStrings + (ebx * 4)]					; copies the address of the specified string into eax
-	
+	.while (eax > 0)
+		.If ([StringNode ptr [esi]].ptrNextNode == 0)
+			jmp error
+		.EndIf
+		mov esi, [StringNode ptr [esi]].ptrNextNode
+		dec eax
+	.endw
+
+	jmp confirm
+
 ;	.If (eax == 0)										; if the string they chose does not exist
-;		invoke putstring, addr strShowInvalidInput		; Output error message 
-;		invoke putstring, addr strAskNewInput			; Ask if they want to choose a different number
-;getInput1:	
-;		invoke getche									; Wait for user input
-;		.If (al == 'y' || al == 'Y')					; if user inputs a 'y' or 'Y'
-;			pop ecx	
-;			jmp chooseNumber							; 	then jmp to choose another number
-;		.Elseif (al == 'n' || al == 'N')				; if user inputs a 'n' or 'N'
-;			pop ecx	
-;			jmp return									;	then jmp to return to the main function
-;		.Else											; otherwise...
-;			jmp getInput1								;   continue to wait for input
-;		.Endif	
+error:
+		invoke putstring, addr strShowInvalidInput		; Output error message 
+		invoke putstring, addr strAskNewInput			; Ask if they want to choose a different number
+getInput1:	
+		invoke getch									; Wait for user input
+		.If (al == 'y' || al == 'Y')					; if user inputs a 'y' or 'Y'
+			invoke putch, al
+			pop ecx	
+			jmp chooseNumber							; 	then jmp to choose another number
+		.Elseif (al == 'n' || al == 'N')				; if user inputs a 'n' or 'N'
+			invoke putch, al
+			pop ecx	
+			jmp return									;	then jmp to return to the main function
+		.Else											; otherwise...
+			jmp getInput1								;   continue to wait for input
+		.Endif	
 ;	.Else	
-;		mWrite "["										;
-;		mPrintNumber ecx
-;		mWrite "] "                                 	;
-;		invoke putstring, [lpStrings + (ebx * 4)]   	; print the string
-;		invoke putstring, addr strConfirmEdit  			; print a message to confirm edit of string
-;getInput2:	
-;		invoke getch									; Wait for user input
-;		.If (al == 'y' || al == 'Y')                	; if user inputs a 'y' or 'Y'
-;			invoke putch, al
-;			jmp edit                              		; 	then jmp to edit the string
-;		.Elseif (al == 'n' || al == 'N')            	; if user inputs a 'n' or 'N'
-;			invoke putch, al
-;			pop ecx	
-;			jmp chooseNumber                        	;	then jmp to return to the main function
-;		.Else
-;			jmp getInput2
-;		.Endif                                      	                                
+confirm:
+		mWrite "["										;
+		mPrintNumber ebx
+		mWrite "] "                                 	;
+		invoke putstring, [StringNode ptr [esi]].ptrString
+		invoke putstring, addr strConfirmEdit  			; print a message to confirm edit of string
+getInput2:	
+		invoke getch									; Wait for user input
+		.If (al == 'y' || al == 'Y')                	; if user inputs a 'y' or 'Y'
+			invoke putch, al
+			jmp newString                             		; 	then jmp to edit the string
+		.Elseif (al == 'n' || al == 'N')            	; if user inputs a 'n' or 'N'
+			invoke putch, al
+			pop ecx	
+			jmp chooseNumber                        	;	then jmp to return to the main function
+		.Else
+			jmp getInput2
+		.Endif                                      	                                
+
 ;edit:	
 ;	invoke putstring, addr _newl						
 ;	mWrite "["											;
@@ -922,9 +896,11 @@ chooseNumber:
 ;	push [lpStrings + (ebx * 4)]						; push the addres of the string to edit
 ;	call getInput										; begin editing the string
 ;	add esp, 4											;
-	
-	mWrite "Enter new string: "
+
+newString:
+
 	invoke putstring, addr _newl
+	mWrite "Enter new string: "
 	invoke getstring, addr strNewString, dLimitNum	   	; call getInput and store input in strSecondNum
 
 	mListRemoveNode ebx
@@ -1034,6 +1010,8 @@ SearchString PROC
 	invoke putstring, addr strNewString				; print the substring in quotes
 	mWrite """"										;
 
+	mov esi, 0
+
 	.if (ecx == 0)									; if ecx is 0, we found no strings
 		mWrite " was not found in any of the strings!"
 		invoke putstring, addr _newl
@@ -1052,6 +1030,15 @@ SearchString PROC
 			invoke putstring, eax					; print the string to the screen, with capitalized substrings found
 			invoke putstring, addr _newl			; 
 			
+			inc esi
+
+			.If (esi >= 30 && ebp != esp)
+				invoke putstring, addr strContinue						; prompts user to press any key to continue
+				invoke getch											; 
+				invoke putstring, addr _newl
+				mov esi, 0
+			.Endif
+
 			sub ebp, 8
 		.endw										;
 	.endif
@@ -1317,7 +1304,7 @@ buf_size_ok:
 	mov esi, eax
 	
 	mov edx, 0
-	mov ebx, 0	
+	mov ebx, 0
 	
 	.while(edx <= ecx)										; while counter is less than or equal to file size
 				
@@ -1340,16 +1327,102 @@ buf_size_ok:
 		.EndIf												;
 	.endw													; end while
 	
-	
 close_file:					
 	mov	eax, fileHandle										; 
 	call	 CloseFile										;
-					
+
 return:					
 	popad													; restore all registers from the stack
 	leave                              						; restore esp and pop ebp
 	ret					
   
 AppendFile ENDP
+
+
+;****************************************************************
+;* Name: OutputFile							            		*
+;* Purpose:														*
+;*		Outputs file											*
+;* Date created: May 19, 2017									*
+;* Date last modified: May 21, 2017								*
+;****************************************************************%
+OutputFile PROC
+	enter 0, 0							; push ebp and move esp into ebp
+	pushad								; push all registers to save them
+	
+get_file_size:
+	mov ebx, 1
+	mov ecx, 0
+	
+	mov esi, ptrListHead
+	.While (esi != 0)
+		
+		mStrLength <[StringNode ptr [esi]].ptrString>
+		add ebx, eax
+		add ebx, 2
+		mov esi, [StringNode ptr[esi]].ptrNextNode
+		
+	.Endw
+
+	invoke HeapAlloc, hMainHeap, HEAP_ZERO_MEMORY, ebx
+	mov edx, eax
+	push edx
+	
+write_to_buffer:
+	mov ecx, ebx											; move file size in to buffer
+	mov esi, edx											; esi: pointer to the top of the buffer
+	
+	mov edi, ptrListHead									; edi: pointer to the head of the list
+	
+	mov edx, 0												; counter
+	
+	.while(edi != 0)										; while 
+	
+		mStrMove [StringNode ptr[edi]].ptrString, esi		; source string, destination string
+		mov edi, [StringNode ptr[edi]].ptrNextNode			; edi points to the next node
+		
+		mStrLength esi										; returns size of string in eax
+		add esi, eax
+		mov byte ptr [esi], 0dh
+		inc esi
+		mov byte ptr [esi], 0ah
+		inc esi
+		
+	.endw													; end while
+	
+	mov esi, 0
+	
+write_to_file:
+
+	INVOKE CreateFile,
+	ADDR outputFilename, GENERIC_WRITE, DO_NOT_SHARE, NULL,
+	CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0
+
+	mov outputFileHandle,eax			; save file handle
+	.If eax == INVALID_HANDLE_VALUE
+	  mov  edx,OFFSET errMsg		    ; Display error message
+	  call WriteString
+	  pop edx
+	  jmp  return
+	.EndIf
+
+	pop edx
+	INVOKE WriteFile,		; write text to file
+	outputFileHandle,		; file handle
+	edx,					; lpStrings pointer	
+    ebx,					; number of bytes to write
+	ADDR bytesWritten,		; number of bytes written
+	0						; overlapped execution flag
+
+	INVOKE CloseHandle, outputFileHandle
+
+	
+return:
+	INVOKE HeapFree, hMainHeap, 0, edx
+	popad													; restore all registers from the stack
+	leave                              						; restore esp and pop ebp
+	ret					
+  
+OutputFile ENDP
 
 end			; End of program
