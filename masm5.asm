@@ -343,6 +343,7 @@ filename				BYTE "input.txt", 0
 fileHandle				HANDLE ?
 
 ; output file data 
+
 bufSize 	 	 DWORD ($-buffer)
 errMsg 			 BYTE "Cannot create file",0dh,0ah,0
 outputFilename   BYTE "output.txt",0
@@ -477,6 +478,7 @@ mainMenu:
 		call AppendFile		                            	;
 	.ElseIf (intInputNum == 8)                              ; if user enters 8: end program
 		invoke putstring, addr strMainMenu8                 ;
+		call OutputFile
 		jmp endProgram                                      ;
 	.Endif                                                  ;
 	
@@ -1343,26 +1345,66 @@ close_file:
 	mov	eax, fileHandle										; 
 	call	 CloseFile										;
 
-; End of append file
+return:					
+	popad													; restore all registers from the stack
+	leave                              						; restore esp and pop ebp
+	ret					
+  
+AppendFile ENDP
 
+
+;****************************************************************
+;* Name: OutputFile							            		*
+;* Purpose:														*
+;*		Outputs file											*
+;* Date created: May 19, 2017									*
+;* Date last modified: May 21, 2017								*
+;****************************************************************%
+OutputFile PROC
+	enter 0, 0							; push ebp and move esp into ebp
+	pushad								; push all registers to save them
 	
 get_file_size:
-	mov ebx, 0
+	mov ebx, 1
 	mov ecx, 0
 	
-	.while (ecx < STRING_ARRAY_SIZE)				; while our index < array size...
-		.if ([lpStrings + (ecx * 4)] != 0)			; if the string we're looking at isn't empty...
-			inc ebx									; then, inc ebx to count the null terminator
+	mov esi, ptrListHead
+	.While (esi != 0)
+		
+		mStrLength <[StringNode ptr [esi]].ptrString>
+		add ebx, eax
+		add ebx, 2
+		mov esi, [StringNode ptr[esi]].ptrNextNode
+		
+	.Endw
 
-			push [lpStrings + (ecx * 4)]			; 
-			call String_length						; also find the length of that string
-			add esp,4								;
-
-			add ebx, eax							; ...and add it to the total as well
-		.endif
-
-		inc ecx										; then increment which string we're looking at with ecx
-	.endw
+	invoke HeapAlloc, hMainHeap, HEAP_ZERO_MEMORY, ebx
+	mov edx, eax
+	push edx
+	
+write_to_buffer:
+	mov ecx, ebx											; move file size in to buffer
+	mov esi, edx											; esi: pointer to the top of the buffer
+	
+	mov edi, ptrListHead									; edi: pointer to the head of the list
+	
+	mov edx, 0												; counter
+	
+	.while(edi != 0)										; while 
+	
+		mStrMove [StringNode ptr[edi]].ptrString, esi		; source string, destination string
+		mov edi, [StringNode ptr[edi]].ptrNextNode			; edi points to the next node
+		
+		mStrLength esi										; returns size of string in eax
+		add esi, eax
+		mov byte ptr [esi], 0dh
+		inc esi
+		mov byte ptr [esi], 0ah
+		inc esi
+		
+	.endw													; end while
+	
+	mov esi, 0
 	
 write_to_file:
 
@@ -1374,23 +1416,27 @@ write_to_file:
 	.If eax == INVALID_HANDLE_VALUE
 	  mov  edx,OFFSET errMsg		    ; Display error message
 	  call WriteString
+	  pop edx
 	  jmp  return
 	.EndIf
 
+	pop edx
 	INVOKE WriteFile,		; write text to file
 	outputFileHandle,		; file handle
-	lpStrings,				; lpStrings pointer	
+	edx,					; lpStrings pointer	
     ebx,					; number of bytes to write
 	ADDR bytesWritten,		; number of bytes written
 	0						; overlapped execution flag
 
 	INVOKE CloseHandle, outputFileHandle
 
-return:					
+	
+return:
+	INVOKE HeapFree, hMainHeap, 0, edx
 	popad													; restore all registers from the stack
 	leave                              						; restore esp and pop ebp
 	ret					
   
-AppendFile ENDP
+OutputFile ENDP
 
 end			; End of program
