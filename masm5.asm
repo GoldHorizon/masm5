@@ -1343,7 +1343,7 @@ close_file:
 	mov	eax, fileHandle										; 
 	call	 CloseFile										;
 
-// End of append file
+; End of append file
 
 	
 get_file_size:
