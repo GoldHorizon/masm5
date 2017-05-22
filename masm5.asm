@@ -147,8 +147,15 @@ lpStrings				dword	STRING_ARRAY_SIZE	dup(?)
 ; file data
 
 buffer 					BYTE BUFFER_SIZE DUP(?)
-filename				BYTE "output.txt", 0
+filename				BYTE "input.txt", 0
 fileHandle				HANDLE ?
+
+; output file data 
+bufSize 	 	 DWORD ($-buffer)
+errMsg 			 BYTE "Cannot create file",0dh,0ah,0
+outputFilename   BYTE "output.txt",0
+outputFileHandle DWORD ?		; handle to output file
+bytesWritten 	 DWORD ?    	; number of bytes written
 
 
 ; Number variables
@@ -162,6 +169,7 @@ tempPtr					dword	?
 byteAnswer				byte	2 dup(?)
 intAnswer				dword	?
 
+strOutput				byte 	?
 strNewString			byte	128 dup(?)
 strOutputStr			byte	31 dup(?)
 newLine30				byte	30 dup(10,13),0
@@ -502,7 +510,7 @@ getInput1:
 		.Endif
 	.Else
 		mWrite "Deleting: ["								; 
-		mPrintNumber ecx                           		; print the number of string we're deleting
+		mPrintNumber ecx                           			; print the number of string we're deleting
 		mWrite "] "                                 		;
 		invoke putstring, [lpStrings + (ebx * 4)]   		; print the string
 		invoke putstring, addr strConfirmDeletion   		; print a message to confirm deletion of string
@@ -946,13 +954,6 @@ AppendFile PROC
 	
 	mov ecx, 0							; which string we're looking at
 	mov ebx, 0							; how many bytes we've counted so far
-;	mov edx, 0
-
-; Let user input a filename.
-;	mWrite "Enter an input filename: "
-;	mov	edx,OFFSET filename
-;	mov	ecx,SIZEOF filename
-;	call	ReadString
 
 ; Open the file for input.
 	mov	edx, OFFSET filename								;
@@ -1017,11 +1018,12 @@ buf_size_ok:
 		jmp close_file										; jump to return
 		
 		inputString:
-		.If (byte ptr[[esi]+edx] == 0dh || byte ptr[[esi]+edx] == 0ah)					; if return character
+		.If (byte ptr[[esi]+edx] == 0dh || byte ptr[[esi]+edx] == 0ah)		; if return character
 			mov byte ptr[[esi]+edx], 0						; null terminator
 			
 			inc  edx										; increments edx for null terminator
 			push edx
+			
 			invoke HeapAlloc, hHeap, HEAP_ZERO_MEMORY, edx	; allocate that many bytes of memory on the main heap
 			mov [lpStrings + (ebx * 4)], eax				; copy the address of the memory location allocated into appropriate array 
 			
@@ -1029,8 +1031,9 @@ buf_size_ok:
 			push esi										; 
 			call String_move								; call string move to move our new string into the new memory location
 			add esp, 8										;	
-		
+			
 			pop edx
+			
 			.If (byte ptr [[esi] + edx] == 0ah)
 				inc esi
 			.EndIf
@@ -1043,11 +1046,52 @@ buf_size_ok:
 		.EndIf												;
 	.endw													; end while
 	
-	
 close_file:					
 	mov	eax, fileHandle										; 
 	call	 CloseFile										;
-					
+
+
+	
+get_file_size:
+	mov ebx, 0
+	mov ecx, 0
+	
+	.while (ecx < STRING_ARRAY_SIZE)				; while our index < array size...
+		.if ([lpStrings + (ecx * 4)] != 0)			; if the string we're looking at isn't empty...
+			inc ebx									; then, inc ebx to count the null terminator
+
+			push [lpStrings + (ecx * 4)]			; 
+			call String_length						; also find the length of that string
+			add esp,4								;
+
+			add ebx, eax							; ...and add it to the total as well
+		.endif
+
+		inc ecx										; then increment which string we're looking at with ecx
+	.endw
+	
+write_to_file:
+
+	INVOKE CreateFile,
+	ADDR outputFilename, GENERIC_WRITE, DO_NOT_SHARE, NULL,
+	CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0
+
+	mov outputFileHandle,eax			; save file handle
+	.If eax == INVALID_HANDLE_VALUE
+	  mov  edx,OFFSET errMsg		    ; Display error message
+	  call WriteString
+	  jmp  return
+	.EndIf
+
+	INVOKE WriteFile,		; write text to file
+	outputFileHandle,		; file handle
+	lpStrings,				; lpStrings pointer	
+    ebx,					; number of bytes to write
+	ADDR bytesWritten,		; number of bytes written
+	0						; overlapped execution flag
+
+	INVOKE CloseHandle, outputFileHandle
+
 return:					
 	popad													; restore all registers from the stack
 	leave                              						; restore esp and pop ebp
