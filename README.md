@@ -1,6 +1,8 @@
-# masm4
-CS3B masm4 Assignment
+# masm5
+CS3B masm5 Assignment
 
+---
+Note: Document outdated.
 ---
 
 ## Using `git`
